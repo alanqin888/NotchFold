@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>iPhone Duo Fold</title>
+<style>
+  /* ─── Reset & Foundation ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  @font-face {
+    font-family: 'SF Pro Display';
+    src: local('SF Pro Display'), local('.SFNSDisplay'), local('SFProDisplay-Regular');
+    font-weight: 100 900;
+  }
+
+  :root {
+    --phone-w: min(380px, 88vw);
+    --phone-h: calc(var(--phone-w) * 2.164);
+    --bezel: 3.2%;
+    --corner: 13.5%;
+    --notch-w: 35%;
+    --hinge-h: 6px;
+    --fold-angle: 0;
+    --fold-pct: 0;
+    
+    /* Wallpaper palette — dusk tones */
+    --sky-top: #1a1a2e;
+    --sky-mid: #16213e;
+    --sky-bot: #0f3460;
+    --horizon: #e94560;
+    --ground-near: #1a1a2e;
+    --ground-far: #16213e;
+    --sun: #ff6b6b;
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #0a0a0a;
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    cursor: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ─── Custom Cursor ─── */
+  .cursor {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transition: transform 0.15s ease, border-color 0.2s ease;
+    mix-blend-mode: difference;
+  }
+  .cursor.active {
+    transform: scale(2.5);
+    border-color: rgba(255,255,255,0.8);
+  }
+
+  /* ─── Stage ─── */
+  .stage {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    perspective: 1800px;
+    perspective-origin: 50% 45%;
+  }
+
+  /* Ambient glow behind the phone */
+  .stage::before {
+    content: '';
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(233,69,96,0.08) 0%, transparent 70%);
+    filter: blur(60px);
+    pointer-events: none;
+    animation: ambientPulse 8s ease-in-out infinite;
+  }
+
+  @keyframes ambientPulse {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.15); }
+  }
+
+  /* ─── Phone Frame ─── */
+  .phone {
+    position: relative;
+    width: var(--phone-w);
+    height: var(--phone-h);
+    /* The phone itself is the container — no 3D on it, only on halves */
+  }
+
+  /* ─── Two Halves ─── */
+  .half {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 50%;
+    overflow: hidden;
+  }
+
+  .half--top {
+    top: 0;
+    transform-origin: 50% 100%;
+    transform: perspective(1600px) rotateX(calc(var(--fold-angle) * 1deg));
+    border-radius: var(--corner) var(--corner) 0 0;
+    /* Subtle edge shadow on the folding half */
+    will-change: transform;
+  }
+
+  .half--bottom {
+    top: 50%;
+    border-radius: 0 0 var(--corner) var(--corner);
+  }
+
+  /* ─── Bezel & Screen ─── */
+  .bezel {
+    position: absolute;
+    inset: 0;
+    background: #1c1c1e;
+    border-radius: inherit;
+  }
+
+  .half--top .bezel {
+    border-radius: var(--corner) var(--corner) 0 0;
+  }
+  .half--bottom .bezel {
+    border-radius: 0 0 var(--corner) var(--corner);
+  }
+
+  .screen {
+    position: absolute;
+    background: #000;
+    overflow: hidden;
+  }
+
+  .half--top .screen {
+    inset: var(--bezel) var(--bezel) 0;
+    border-radius: calc(var(--corner) - var(--bezel)) calc(var(--corner) - var(--bezel)) 0 0;
+  }
+
+  .half--bottom .screen {
+    inset: 0 var(--bezel) var(--bezel);
+    border-radius: 0 0 calc(var(--corner) - var(--bezel)) calc(var(--corner) - var(--bezel));
+  }
+
+  /* ─── Dynamic Island (Top Half) ─── */
+  .dynamic-island {
+    position: absolute;
+    top: 3.5%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 28%;
+    height: 3.8%;
+    background: #000;
+    border-radius: 100px;
+    z-index: 10;
+  }
+
+  /* ─── Home Indicator (Bottom Half) ─── */
+  .home-indicator {
+    position: absolute;
+    bottom: 2.5%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36%;
+    height: 1.2%;
+    background: rgba(255,255,255,0.55);
+    border-radius: 100px;
+    z-index: 10;
+  }
+
+  /* ─── Hinge ─── */
+  .hinge {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: var(--hinge-h);
+    background: linear-gradient(
+      to bottom,
+      #2a2a2a 0%,
+      #3a3a3a 30%,
+      #4a4a4a 50%,
+      #3a3a3a 70%,
+      #2a2a2a 100%
+    );
+    z-index: 5;
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(0,0,0,0.6);
+  }
+
+  /* ─── Wallpaper (rendered in each half, positioned to form one continuous image) ─── */
+  .wallpaper {
+    position: absolute;
+    width: 100%;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .half--top .wallpaper {
+    top: 0;
+    height: 200%; /* doubled so we see full wallpaper, but clipped by overflow */
+    border-radius: inherit;
+  }
+
+  .half--bottom .wallpaper {
+    top: -100%;
+    height: 200%;
+    border-radius: inherit;
+  }
+
+  /* SVG wallpaper fills each wallpaper container */
+  .wallpaper svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ─── Clock & Date ─── */
+  .lockscreen {
+    position: absolute;
+    width: 100%;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .half--top .lockscreen {
+    top: 0;
+    height: 200%;
+  }
+
+  .half--bottom .lockscreen {
+    top: -100%;
+    height: 200%;
+  }
+
+  .lockscreen-inner {
+    position: absolute;
+    top: 14%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.92);
+  }
+
+  .lock-date {
+    font-size: clamp(11px, 3.2cqi, 16px);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.3);
+  }
+
+  .lock-time {
+    font-size: clamp(48px, 18cqi, 86px);
+    font-weight: 200;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Widgets area — bottom portion */
+  .widgets {
+    position: absolute;
+    bottom: 18%;
+    left: 8%;
+    right: 8%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .widget {
+    background: rgba(255,255,255,0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 12px;
+    color: rgba(255,255,255,0.85);
+    font-size: clamp(9px, 2.4cqi, 13px);
+  }
+
+  .widget-icon {
+    font-size: clamp(16px, 5cqi, 24px);
+    margin-bottom: 6px;
+  }
+
+  .widget-label {
+    opacity: 0.6;
+    font-size: clamp(8px, 2cqi, 11px);
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .widget-value {
+    font-weight: 300;
+    font-size: clamp(14px, 4cqi, 22px);
+    letter-spacing: -0.02em;
+  }
+
+  /* ─── Fold Effects: Blur Layers ─── */
+  .fold-blur {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    overflow: hidden;
+    will-change: opacity;
+  }
+
+  .fold-blur .wallpaper,
+  .fold-blur .lockscreen {
+    /* These inherit from the parent half — they duplicate the content */
+  }
+
+  .fold-blur--light {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .fold-blur--medium {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .fold-blur--heavy {
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+  }
+
+  /* ─── Fold Shadow Overlay ─── */
+  .fold-shade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    border-radius: inherit;
+    z-index: 4;
+    will-change: opacity;
+  }
+
+  .half--top .fold-shade {
+    background:
+      linear-gradient(to top,
+        rgba(0,0,0,0.6) 0%,
+        rgba(0,0,0,0.3) 20%,
+        rgba(0,0,0,0.1) 50%,
+        transparent 80%
+      );
+  }
+
+  .half--bottom .fold-shade {
+    background:
+      linear-gradient(to bottom,
+        rgba(0,0,0,0.5) 0%,
+        rgba(0,0,0,0.2) 15%,
+        transparent 40%
+      );
+  }
+
+  /* ─── Hinge Crease Light ─── */
+  .crease-light {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .half--top .crease-light {
+    bottom: 0;
+    background: linear-gradient(to right, transparent 10%, rgba(255,255,255,0.12) 50%, transparent 90%);
+  }
+
+  .half--bottom .crease-light {
+    top: 0;
+    background: linear-gradient(to right, transparent 10%, rgba(255,255,255,0.06) 50%, transparent 90%);
+  }
+
+  /* ─── Top-level reflection ─── */
+  .reflection {
+    position: absolute;
+    bottom: -40%;
+    left: 5%;
+    right: 5%;
+    height: 50%;
+    opacity: 0.06;
+    transform: scaleY(-1);
+    filter: blur(8px);
+    pointer-events: none;
+    border-radius: var(--corner);
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 60%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent 60%);
+  }
+
+  /* ─── UI Chrome ─── */
+  .ui-hint {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.25);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 500;
+    transition: opacity 1s ease;
+    pointer-events: none;
+  }
+
+  .ui-angle {
+    position: fixed;
+    top: 28px;
+    right: 32px;
+    color: rgba(255,255,255,0.3);
+    font-size: 13px;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    pointer-events: none;
+    z-index: 20;
+  }
+  .ui-angle b {
+    color: rgba(255,255,255,0.6);
+    font-weight: 500;
+  }
+
+  .mode-toggle {
+    position: fixed;
+    top: 28px;
+    left: 32px;
+    z-index: 20;
+    display: flex;
+    gap: 6px;
+  }
+
+  .mode-btn {
+    appearance: none;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: rgba(255,255,255,0.4);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 6px 14px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+  }
+
+  .mode-btn:hover {
+    border-color: rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.7);
+    background: rgba(255,255,255,0.08);
+  }
+
+  .mode-btn.active {
+    border-color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.85);
+    background: rgba(255,255,255,0.1);
+  }
+
+  /* ─── Desktop App Actions & Video Modal ─── */
+  .desktop-actions {
+    position: fixed;
+    top: 24px;
+    right: 96px;
+    z-index: 25;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .desktop-btn {
+    appearance: none;
+    text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    color: rgba(255,255,255,0.85);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 7px 15px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .desktop-btn:hover {
+    background: rgba(255,255,255,0.14);
+    border-color: rgba(255,255,255,0.35);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .desktop-btn--download {
+    background: linear-gradient(135deg, rgba(0,122,255,0.8), rgba(0,85,225,0.9));
+    border-color: rgba(64,156,255,0.7);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0,122,255,0.35);
+  }
+  .desktop-btn--download:hover {
+    background: linear-gradient(135deg, rgba(0,132,255,0.9), rgba(0,95,245,1.0));
+    box-shadow: 0 4px 18px rgba(0,122,255,0.5);
+  }
+
+  /* 视频弹窗 */
+  .video-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0,0,0,0.78);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .video-modal.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .video-card {
+    position: relative;
+    width: min(860px, 92vw);
+    background: #121214;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.85);
+  }
+  .video-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .video-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+  }
+  .video-close-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.5);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .video-close-btn:hover {
+    color: #fff;
+    background: rgba(255,255,255,0.1);
+  }
+  .video-player {
+    width: 100%;
+    max-height: 70vh;
+    display: block;
+    background: #000;
+  }
+
+  /* ─── Wallpaper selector ─── */
+  .wallpaper-selector {
+    position: fixed;
+    bottom: 28px;
+    right: 32px;
+    display: flex;
+    gap: 8px;
+    z-index: 20;
+  }
+
+  .wp-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .wp-dot:hover {
+    border-color: rgba(255,255,255,0.5);
+    transform: scale(1.3);
+  }
+
+  .wp-dot.active {
+    border-color: rgba(255,255,255,0.7);
+    box-shadow: 0 0 6px rgba(255,255,255,0.2);
+  }
+
+  .wp-dot[data-wp="dusk"] { background: linear-gradient(135deg, #e94560, #1a1a2e); }
+  .wp-dot[data-wp="aurora"] { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+  .wp-dot[data-wp="ocean"] { background: linear-gradient(135deg, #667eea, #764ba2); }
+  .wp-dot[data-wp="ember"] { background: linear-gradient(135deg, #f7971e, #ffd200); }
+
+  /* ─── Stars for wallpaper ─── */
+  .stars {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: #fff;
+    border-radius: 50%;
+    animation: twinkle 3s ease-in-out infinite alternate;
+  }
+
+  @keyframes twinkle {
+    0% { opacity: 0.2; }
+    100% { opacity: 0.8; }
+  }
+
+  /* ─── Particles ─── */
+  .particles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .particle {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    animation: drift linear infinite;
+  }
+
+  @keyframes drift {
+    0% { transform: translateY(100vh) translateX(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-20vh) translateX(40px); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="cursor" id="cursor"></div>
+<div class="particles" id="particles"></div>
+
+<div class="stage" id="stage">
+  <div class="phone" id="phone">
+    <!-- ─── Top Half ─── -->
+    <div class="half half--top" id="halfTop">
+      <div class="bezel">
+        <div class="screen">
+          <div class="wallpaper" id="wpTop"></div>
+          <div class="lockscreen">
+            <div class="lockscreen-inner">
+              <div class="lock-date" id="lockDate"></div>
+              <div class="lock-time" id="lockTime"></div>
+            </div>
+          </div>
+          <div class="dynamic-island"></div>
+        </div>
+        <div class="fold-shade"></div>
+        <div class="crease-light"></div>
+      </div>
+    </div>
+
+    <!-- ─── Hinge ─── -->
+    <div class="hinge" id="hinge"></div>
+
+    <!-- ─── Bottom Half ─── -->
+    <div class="half half--bottom" id="halfBottom">
+      <div class="bezel">
+        <div class="screen">
+          <div class="wallpaper" id="wpBottom"></div>
+          <div class="lockscreen">
+            <div class="lockscreen-inner">
+              <div class="lock-date"></div>
+              <div class="lock-time"></div>
+            </div>
+            <div class="widgets">
+              <div class="widget">
+                <div class="widget-icon">🌤</div>
+                <div class="widget-label">天气</div>
+                <div class="widget-value">26°</div>
+              </div>
+              <div class="widget">
+                <div class="widget-icon">🎵</div>
+                <div class="widget-label">正在播放</div>
+                <div class="widget-value">Daylight</div>
+              </div>
+              <div class="widget">
+                <div class="widget-icon">📅</div>
+                <div class="widget-label">日历</div>
+                <div class="widget-value" id="calWidget">今天</div>
+              </div>
+              <div class="widget">
+                <div class="widget-icon">⚡</div>
+                <div class="widget-label">电池</div>
+                <div class="widget-value">86%</div>
+              </div>
+            </div>
+          </div>
+          <div class="home-indicator"></div>
+        </div>
+        <div class="fold-shade"></div>
+        <div class="crease-light"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UI -->
+<div class="mode-toggle">
+  <button class="mode-btn active" data-mode="breathe">呼吸</button>
+  <button class="mode-btn" data-mode="mouse">跟手</button>
+  <button class="mode-btn" data-mode="scroll">滚轮</button>
+</div>
+
+<!-- Desktop App & Demo Actions -->
+<div class="desktop-actions">
+  <button class="desktop-btn" id="btnDemoModal">
+    <span>📺</span> 实机演示
+  </button>
+  <a class="desktop-btn desktop-btn--download" href="./NotchFold-macOS.zip" download="NotchFold-macOS.zip">
+    <span>⬇️</span> 下载 NotchFold (macOS)
+  </a>
+</div>
+
+<!-- Video Modal -->
+<div class="video-modal" id="videoModal">
+  <div class="video-card">
+    <div class="video-header">
+      <div class="video-title">NotchFold · 物理刘海灵动岛实机演练</div>
+      <button class="video-close-btn" id="btnCloseVideo">✕</button>
+    </div>
+    <video class="video-player" id="demoVideo" src="./demo.mp4" controls preload="metadata"></video>
+  </div>
+</div>
+
+<div class="ui-angle" id="uiAngle">
+  <b id="angleVal">0</b>°
+</div>
+
+<div class="ui-hint" id="uiHint">iPhone Duo · 折叠屏效果</div>
+
+<div class="wallpaper-selector">
+  <div class="wp-dot active" data-wp="dusk" title="暮色"></div>
+  <div class="wp-dot" data-wp="aurora" title="极光"></div>
+  <div class="wp-dot" data-wp="ocean" title="深海"></div>
+  <div class="wp-dot" data-wp="ember" title="余烬"></div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ─── Wallpaper SVGs ───
+  const wallpapers = {
+    dusk: `
+      <svg viewBox="0 0 400 860" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="dSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0d0d1a"/>
+            <stop offset="0.35" stop-color="#1a1a2e"/>
+            <stop offset="0.55" stop-color="#16213e"/>
+            <stop offset="0.72" stop-color="#0f3460"/>
+            <stop offset="0.85" stop-color="#e94560"/>
+            <stop offset="1" stop-color="#f5c6aa"/>
+          </linearGradient>
+          <radialGradient id="dSun" cx="0.65" cy="0.78" r="0.15">
+            <stop offset="0" stop-color="#ff9a76" stop-opacity="0.9"/>
+            <stop offset="0.4" stop-color="#ff6b6b" stop-opacity="0.4"/>
+            <stop offset="1" stop-color="transparent"/>
+          </radialGradient>
+          <linearGradient id="dMtn1" x1="0" y1="0" x2="0.3" y2="1">
+            <stop offset="0" stop-color="#1a1a3a"/>
+            <stop offset="1" stop-color="#0d0d1a"/>
+          </linearGradient>
+          <linearGradient id="dMtn2" x1="0.5" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#252550"/>
+            <stop offset="1" stop-color="#121230"/>
+          </linearGradient>
+        </defs>
+        <rect width="400" height="860" fill="url(#dSky)"/>
+        <circle cx="260" cy="670" r="65" fill="url(#dSun)"/>
+        <circle cx="260" cy="672" r="22" fill="#ff9a76" opacity="0.7"/>
+        <path d="M0 720 Q60 660 120 700 Q180 640 240 690 Q320 620 400 680 V860 H0Z" fill="url(#dMtn1)" opacity="0.8"/>
+        <path d="M0 760 Q100 710 200 740 Q280 700 400 730 V860 H0Z" fill="url(#dMtn2)" opacity="0.9"/>
+        <path d="M0 800 Q80 780 160 790 Q260 770 400 785 V860 H0Z" fill="#0a0a15"/>
+      </svg>`,
+
+    aurora: `
+      <svg viewBox="0 0 400 860" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="aSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#020111"/>
+            <stop offset="0.5" stop-color="#071330"/>
+            <stop offset="0.8" stop-color="#0d1b2a"/>
+            <stop offset="1" stop-color="#1b2838"/>
+          </linearGradient>
+          <linearGradient id="aGlow1" x1="0.2" y1="0" x2="0.8" y2="0.6" gradientUnits="objectBoundingBox">
+            <stop offset="0" stop-color="#43e97b" stop-opacity="0"/>
+            <stop offset="0.3" stop-color="#43e97b" stop-opacity="0.3"/>
+            <stop offset="0.6" stop-color="#38f9d7" stop-opacity="0.2"/>
+            <stop offset="1" stop-color="#38f9d7" stop-opacity="0"/>
+          </linearGradient>
+          <linearGradient id="aGlow2" x1="0.6" y1="0.1" x2="0.3" y2="0.5" gradientUnits="objectBoundingBox">
+            <stop offset="0" stop-color="#667eea" stop-opacity="0"/>
+            <stop offset="0.4" stop-color="#667eea" stop-opacity="0.25"/>
+            <stop offset="0.7" stop-color="#764ba2" stop-opacity="0.15"/>
+            <stop offset="1" stop-color="#764ba2" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <rect width="400" height="860" fill="url(#aSky)"/>
+        <ellipse cx="150" cy="250" rx="200" ry="300" fill="url(#aGlow1)"/>
+        <ellipse cx="280" cy="300" rx="180" ry="280" fill="url(#aGlow2)"/>
+        <path d="M0 780 Q60 750 130 770 Q220 740 320 760 Q370 750 400 755 V860 H0Z" fill="#0a1520" opacity="0.9"/>
+        <path d="M0 810 Q100 795 200 805 Q300 790 400 800 V860 H0Z" fill="#060d15"/>
+      </svg>`,
+
+    ocean: `
+      <svg viewBox="0 0 400 860" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="oSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#0c0c1d"/>
+            <stop offset="0.3" stop-color="#1e1e4a"/>
+            <stop offset="0.6" stop-color="#3a3a8c"/>
+            <stop offset="0.8" stop-color="#5e5eb8"/>
+            <stop offset="1" stop-color="#8686d6"/>
+          </linearGradient>
+          <radialGradient id="oMoon" cx="0.3" cy="0.2" r="0.08">
+            <stop offset="0" stop-color="#e8e8ff" stop-opacity="0.95"/>
+            <stop offset="0.6" stop-color="#c0c0f0" stop-opacity="0.3"/>
+            <stop offset="1" stop-color="transparent"/>
+          </radialGradient>
+          <linearGradient id="oWater" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2a2a6a"/>
+            <stop offset="0.5" stop-color="#1a1a4a"/>
+            <stop offset="1" stop-color="#0d0d2a"/>
+          </linearGradient>
+        </defs>
+        <rect width="400" height="860" fill="url(#oSky)"/>
+        <circle cx="120" cy="170" r="35" fill="url(#oMoon)"/>
+        <circle cx="120" cy="170" r="18" fill="#e8e8ff" opacity="0.8"/>
+        <path d="M0 560 Q50 545 100 555 Q180 530 260 550 Q340 535 400 545 V860 H0Z" fill="url(#oWater)"/>
+        <path d="M0 580 Q70 600 150 590 Q230 610 300 595 Q360 605 400 600 V610 Q340 600 280 608 Q200 620 120 605 Q60 615 0 605Z" fill="rgba(255,255,255,0.04)"/>
+        <path d="M0 650 Q80 660 160 645 Q250 665 340 650 Q380 655 400 652 V660 Q360 658 300 665 Q210 675 120 660 Q50 670 0 660Z" fill="rgba(255,255,255,0.03)"/>
+      </svg>`,
+
+    ember: `
+      <svg viewBox="0 0 400 860" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="eSky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#1a0a00"/>
+            <stop offset="0.3" stop-color="#2d1200"/>
+            <stop offset="0.55" stop-color="#5a2500"/>
+            <stop offset="0.75" stop-color="#cc6600"/>
+            <stop offset="0.88" stop-color="#ff9933"/>
+            <stop offset="1" stop-color="#ffd699"/>
+          </linearGradient>
+          <radialGradient id="eLava" cx="0.5" cy="0.85" r="0.25">
+            <stop offset="0" stop-color="#ff6600" stop-opacity="0.6"/>
+            <stop offset="0.5" stop-color="#cc3300" stop-opacity="0.2"/>
+            <stop offset="1" stop-color="transparent"/>
+          </radialGradient>
+        </defs>
+        <rect width="400" height="860" fill="url(#eSky)"/>
+        <rect x="0" y="0" width="400" height="860" fill="url(#eLava)"/>
+        <path d="M0 720 Q80 680 160 710 Q260 670 340 700 Q380 690 400 695 V860 H0Z" fill="#1a0a00" opacity="0.85"/>
+        <path d="M0 770 Q100 755 200 765 Q300 748 400 758 V860 H0Z" fill="#110700" opacity="0.9"/>
+        <path d="M0 820 Q60 810 140 818 Q250 805 400 815 V860 H0Z" fill="#0a0400"/>
+      </svg>`
+  };
+
+  // ─── State ───
+  let currentWp = 'dusk';
+  let mode = 'breathe';       // 'breathe' | 'mouse' | 'scroll'
+  let foldTarget = 0;         // 0–1
+  let foldCurrent = 0;
+  let scrollAccum = 0;
+  let mouseY = 0.5;
+  let breathePhase = 0;
+  let isDragging = false;
+
+  // ─── DOM refs ───
+  const halfTop = document.getElementById('halfTop');
+  const halfBottom = document.getElementById('halfBottom');
+  const hinge = document.getElementById('hinge');
+  const wpTop = document.getElementById('wpTop');
+  const wpBottom = document.getElementById('wpBottom');
+  const lockDate = document.getElementById('lockDate');
+  const lockTime = document.getElementById('lockTime');
+  const angleVal = document.getElementById('angleVal');
+  const uiHint = document.getElementById('uiHint');
+  const cursor = document.getElementById('cursor');
+  const stage = document.getElementById('stage');
+
+  // ─── Wallpaper ───
+  function setWallpaper(name) {
+    currentWp = name;
+    const svg = wallpapers[name];
+    wpTop.innerHTML = svg;
+    wpBottom.innerHTML = svg;
+
+    // Update bottom half lockscreen duplicates
+    const bottomDates = halfBottom.querySelectorAll('.lock-date');
+    const bottomTimes = halfBottom.querySelectorAll('.lock-time');
+    bottomDates.forEach(el => el.id = '');
+    bottomTimes.forEach(el => el.id = '');
+
+    // Update wallpaper dots
+    document.querySelectorAll('.wp-dot').forEach(d => {
+      d.classList.toggle('active', d.dataset.wp === name);
+    });
+
+    // Ambient glow color
+    const colors = {
+      dusk: 'rgba(233,69,96,0.08)',
+      aurora: 'rgba(67,233,123,0.06)',
+      ocean: 'rgba(102,126,234,0.08)',
+      ember: 'rgba(255,153,0,0.07)'
+    };
+    document.querySelector('.stage').style.setProperty('--ambient', colors[name]);
+  }
+
+  // ─── Clock ───
+  function updateClock() {
+    const now = new Date();
+    const days = ['周日','周一','周二','周三','周四','周五','周六'];
+    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    
+    const dateStr = `${months[now.getMonth()]}${now.getDate()}日 ${days[now.getDay()]}`;
+    const h = now.getHours().toString().padStart(2, '0');
+    const m = now.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${h}:${m}`;
+
+    lockDate.textContent = dateStr;
+    lockTime.textContent = timeStr;
+
+    // Sync bottom half clock
+    const bottomDates = halfBottom.querySelectorAll('.lock-date');
+    const bottomTimes = halfBottom.querySelectorAll('.lock-time');
+    bottomDates.forEach(el => el.textContent = dateStr);
+    bottomTimes.forEach(el => el.textContent = timeStr);
+  }
+
+  // ─── Smoothstep ───
+  function smoothstep(t) {
+    t = Math.max(0, Math.min(1, t));
+    return t * t * (3 - 2 * t);
+  }
+
+  // ─── Paint fold effect ───
+  function paint(p) {
+    // p: 0 = flat open, 1 = fully folded (90°)
+    const angle = p * 88; // max 88° before visual weirdness
+    const displayAngle = Math.round(p * 180);
+    
+    // 3D rotation on top half — fold from hinge (bottom edge of top half)
+    halfTop.style.transform = `perspective(1600px) rotateX(${(angle).toFixed(2)}deg)`;
+
+    // Progressive blur via backdrop-filter on shade overlay
+    // We'll use the shade overlay opacity to simulate darkening + blur
+    const shadeTop = halfTop.querySelector('.fold-shade');
+    const shadeBot = halfBottom.querySelector('.fold-shade');
+    
+    if (shadeTop) shadeTop.style.opacity = (p * 0.85).toFixed(3);
+    if (shadeBot) shadeBot.style.opacity = (p * 0.35).toFixed(3);
+
+    // Crease light glow at hinge
+    const creaseTop = halfTop.querySelector('.crease-light');
+    const creaseBot = halfBottom.querySelector('.crease-light');
+    if (creaseTop) creaseTop.style.opacity = (p > 0.1 ? Math.min(p * 1.5, 0.6) : 0).toFixed(3);
+    if (creaseBot) creaseBot.style.opacity = (p > 0.1 ? Math.min(p * 0.8, 0.3) : 0).toFixed(3);
+
+    // Hinge shadow grows
+    const hingeGlow = Math.min(p * 20, 12);
+    hinge.style.boxShadow = `0 0 ${hingeGlow.toFixed(1)}px rgba(0,0,0,${(0.3 + p * 0.4).toFixed(2)})`;
+
+    // Scale bottom half slightly to simulate 3D perspective
+    const botScale = 1 + p * 0.02;
+    halfBottom.style.transform = `perspective(1600px) scale(${botScale.toFixed(4)})`;
+
+    // Mask: top half's top edge fades as it folds
+    if (p > 0.05) {
+      const fadeStop = (p * 30).toFixed(1);
+      halfTop.style.maskImage = `linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.3) ${(parseFloat(fadeStop) * 0.3).toFixed(1)}%, #000 ${fadeStop}%)`;
+      halfTop.style.webkitMaskImage = halfTop.style.maskImage;
+    } else {
+      halfTop.style.maskImage = 'none';
+      halfTop.style.webkitMaskImage = 'none';
+    }
+
+    // Update angle display
+    angleVal.textContent = displayAngle;
+
+    // Phone shadow
+    const phone = document.getElementById('phone');
+    const shadowBlur = 40 + p * 30;
+    const shadowSpread = 10 - p * 5;
+    phone.style.filter = `drop-shadow(0 ${(20 + p * 15).toFixed(0)}px ${shadowBlur.toFixed(0)}px rgba(0,0,0,${(0.4 + p * 0.2).toFixed(2)}))`;
+  }
+
+  // ─── Sound ───
+  let audioCtx = null;
+  let foldSoundArmed = true;
+  let unfoldSoundArmed = false;
+
+  function playFoldSound(type) {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch(e) { return; }
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    if (type === 'fold') {
+      osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.12);
+    } else {
+      osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + 0.06);
+      gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 0.1);
+    }
+  }
+
+  function checkSound(p) {
+    if (foldSoundArmed && p > 0.75) {
+      foldSoundArmed = false;
+      unfoldSoundArmed = true;
+      playFoldSound('fold');
+    }
+    if (unfoldSoundArmed && p < 0.2) {
+      unfoldSoundArmed = false;
+      foldSoundArmed = true;
+      playFoldSound('unfold');
+    }
+  }
+
+  // ─── Animation Loop ───
+  let lastTime = 0;
+  function loop(time) {
+    const dt = Math.min((time - lastTime) / 1000, 0.05);
+    lastTime = time;
+
+    // Update target based on mode
+    if (mode === 'breathe') {
+      breathePhase += dt * 0.35;
+      // Slow sine wave, mostly in the 0–0.7 range with occasional deeper folds
+      const base = Math.sin(breathePhase) * 0.5 + 0.5;
+      const deep = Math.sin(breathePhase * 0.37) * 0.5 + 0.5;
+      foldTarget = base * 0.55 + deep * 0.25;
+    } else if (mode === 'mouse') {
+      foldTarget = mouseY;
+    }
+    // scroll mode: foldTarget set by wheel handler
+
+    // Lerp
+    const lerpRate = mode === 'breathe' ? 0.04 : 0.08;
+    foldCurrent += (foldTarget - foldCurrent) * lerpRate;
+    if (Math.abs(foldTarget - foldCurrent) < 0.0003) foldCurrent = foldTarget;
+
+    checkSound(foldCurrent);
+    paint(smoothstep(foldCurrent));
+
+    requestAnimationFrame(loop);
+  }
+
+  // ─── Input Handlers ───
+
+  // Mouse / touch for cursor
+  document.addEventListener('mousemove', e => {
+    cursor.style.left = (e.clientX - 10) + 'px';
+    cursor.style.top = (e.clientY - 10) + 'px';
+
+    if (mode === 'mouse') {
+      mouseY = e.clientY / window.innerHeight;
+    }
+  });
+
+  document.addEventListener('mousedown', () => cursor.classList.add('active'));
+  document.addEventListener('mouseup', () => cursor.classList.remove('active'));
+
+  // Touch support for mobile
+  document.addEventListener('touchmove', e => {
+    if (mode === 'mouse') {
+      const touch = e.touches[0];
+      mouseY = touch.clientY / window.innerHeight;
+    }
+  }, { passive: true });
+
+  // Scroll wheel
+  document.addEventListener('wheel', e => {
+    if (mode === 'scroll') {
+      scrollAccum += e.deltaY * 0.002;
+      scrollAccum = Math.max(0, Math.min(1, scrollAccum));
+      foldTarget = scrollAccum;
+    }
+  }, { passive: true });
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === '1') setMode('breathe');
+    if (e.key === '2') setMode('mouse');
+    if (e.key === '3') setMode('scroll');
+    if (e.key === 'ArrowRight' || e.key === 'd') {
+      const wps = Object.keys(wallpapers);
+      const idx = (wps.indexOf(currentWp) + 1) % wps.length;
+      setWallpaper(wps[idx]);
+    }
+    if (e.key === 'ArrowLeft' || e.key === 'a') {
+      const wps = Object.keys(wallpapers);
+      const idx = (wps.indexOf(currentWp) - 1 + wps.length) % wps.length;
+      setWallpaper(wps[idx]);
+    }
+  });
+
+  // ─── Mode buttons ───
+  function setMode(m) {
+    mode = m;
+    if (m === 'scroll') scrollAccum = foldCurrent;
+    document.querySelectorAll('.mode-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === m);
+    });
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+
+  // ─── Wallpaper dots ───
+  document.querySelectorAll('.wp-dot').forEach(dot => {
+    dot.addEventListener('click', () => setWallpaper(dot.dataset.wp));
+  });
+
+  // ─── Particles ───
+  function initParticles() {
+    const container = document.getElementById('particles');
+    for (let i = 0; i < 15; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = (Math.random() * 100) + '%';
+      p.style.animationDuration = (8 + Math.random() * 12) + 's';
+      p.style.animationDelay = (Math.random() * 10) + 's';
+      p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+      p.style.opacity = (0.05 + Math.random() * 0.15).toFixed(2);
+      container.appendChild(p);
+    }
+  }
+
+  // ─── Init ───
+  function init() {
+    setWallpaper('dusk');
+    updateClock();
+    setInterval(updateClock, 1000);
+    initParticles();
+
+    // Fade hint
+    setTimeout(() => { uiHint.style.opacity = '0'; }, 4000);
+
+    // Desktop App & Video Modal bindings
+    const btnDemoModal = document.getElementById('btnDemoModal');
+    const videoModal = document.getElementById('videoModal');
+    const btnCloseVideo = document.getElementById('btnCloseVideo');
+    const demoVideo = document.getElementById('demoVideo');
+
+    if (btnDemoModal && videoModal && btnCloseVideo && demoVideo) {
+      btnDemoModal.addEventListener('click', (e) => {
+        e.stopPropagation();
+        videoModal.classList.add('open');
+        demoVideo.currentTime = 0;
+        demoVideo.play().catch(() => {});
+      });
+      btnCloseVideo.addEventListener('click', (e) => {
+        e.stopPropagation();
+        videoModal.classList.remove('open');
+        demoVideo.pause();
+      });
+      videoModal.addEventListener('click', (e) => {
+        if (e.target === videoModal) {
+          videoModal.classList.remove('open');
+          demoVideo.pause();
+        }
+      });
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  if (document.readyState === 'complete') init();
+  else window.addEventListener('load', init);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+.DS_Store
+MacDuo_repo/
+test_cg.swift
+NotchFold/NotchFold.app/
+NotchFold/.build/
+*.swp
+*.o
+.build/
