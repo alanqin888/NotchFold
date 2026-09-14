@@ -560,7 +560,7 @@ public final class NotchController: NSObject {
         let s = m.screen
         
         let expandedW: CGFloat = 680
-        let expandedH: CGFloat = 475
+        let expandedH: CGFloat = 390
         let targetX = s.frame.origin.x + (s.frame.width - expandedW) / 2.0
         let targetY = s.frame.origin.y + s.frame.height - expandedH
         let targetFrame = CGRect(x: targetX, y: targetY, width: expandedW, height: expandedH)
@@ -616,7 +616,7 @@ public final class NotchController: NSObject {
         let m = NotchScreenManager.getNotchMetrics()
         if isExpanded {
             let expandedW: CGFloat = 680
-            let expandedH: CGFloat = 460
+            let expandedH: CGFloat = 390
             let targetX = m.screen.frame.origin.x + (m.screen.frame.width - expandedW) / 2.0
             let targetY = m.screen.frame.origin.y + m.screen.frame.height - expandedH
             panel.setFrame(CGRect(x: targetX, y: targetY, width: expandedW, height: expandedH), display: true)
@@ -634,63 +634,215 @@ public final class NotchController: NSObject {
     }
 }
 
-// ─── 支持拖拽添加功能/应用/目录的原生容器 ───
-public final class NotchShortcutsDropView: NSView {
+// ─── NotchNook 风格横向平滑滚动图标托盘（App Tray）───
+public final class NotchAppTrayView: NSView {
     public var onDropURL: ((URL) -> Void)?
-    private var isDragOver = false
+    public var onItemClick: ((CustomShortcut) -> Void)?
+    public var onAddClicked: ((NSView) -> Void)?
+    public var onDeleteItem: ((String) -> Void)?
+    public var isEditMode: Bool = false {
+        didSet { reloadData() }
+    }
+    
+    private let titleLabel = NSTextField(labelWithString: "快捷入口 (APP TRAY)")
+    private let hintLabel = NSTextField(labelWithString: "横向滑动 · 拖入应用/文件夹添加")
+    
+    private let scrollView = NSScrollView()
+    private let shelfContainer = NSView()
     private let dropBorderLayer = CAShapeLayer()
-    private let dropHintView = NSView()
-    private let dropHintLabel = NSTextField(labelWithString: "＋ 拖入此处立即添加到快捷列表")
+    private var isDragOver = false
     
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         registerForDraggedTypes([.fileURL, .URL])
         wantsLayer = true
-        setupDropOverlay()
+        setupViews()
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     
-    private func setupDropOverlay() {
+    public override var isFlipped: Bool { return false }
+    
+    private func setupViews() {
+        titleLabel.font = NSFont.systemFont(ofSize: 10.0, weight: .semibold)
+        titleLabel.textColor = NSColor(white: 0.45, alpha: 1.0)
+        addSubview(titleLabel)
+        
+        hintLabel.font = NSFont.systemFont(ofSize: 9.0, weight: .regular)
+        hintLabel.textColor = NSColor(white: 0.35, alpha: 1.0)
+        hintLabel.alignment = .right
+        addSubview(hintLabel)
+        
+        // 配置横向滚动容器
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.documentView = shelfContainer
+        addSubview(scrollView)
+        
+        // 拖拽高亮描边
         dropBorderLayer.strokeColor = NSColor(red: 0.15, green: 0.65, blue: 1.0, alpha: 0.95).cgColor
-        dropBorderLayer.fillColor = NSColor(red: 0.1, green: 0.5, blue: 1.0, alpha: 0.14).cgColor
-        dropBorderLayer.lineWidth = 2.0
-        dropBorderLayer.lineDashPattern = [6, 4]
+        dropBorderLayer.fillColor = NSColor(red: 0.1, green: 0.5, blue: 1.0, alpha: 0.12).cgColor
+        dropBorderLayer.lineWidth = 1.5
+        dropBorderLayer.lineDashPattern = [5, 3]
         dropBorderLayer.isHidden = true
         layer?.addSublayer(dropBorderLayer)
-        
-        dropHintView.wantsLayer = true
-        dropHintView.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.95).cgColor
-        dropHintView.layer?.cornerRadius = 8
-        dropHintView.layer?.borderWidth = 1.0
-        dropHintView.layer?.borderColor = NSColor(red: 0.2, green: 0.7, blue: 1.0, alpha: 0.6).cgColor
-        dropHintView.isHidden = true
-        
-        dropHintLabel.font = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
-        dropHintLabel.textColor = NSColor(red: 0.35, green: 0.82, blue: 1.0, alpha: 1.0)
-        dropHintLabel.alignment = .center
-        dropHintView.addSubview(dropHintLabel)
-        
-        addSubview(dropHintView)
     }
     
     public override func layout() {
         super.layout()
-        dropBorderLayer.frame = bounds
-        let path = CGPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), cornerWidth: 10, cornerHeight: 10, transform: nil)
+        let r = bounds
+        titleLabel.frame = CGRect(x: 2, y: r.height - 15, width: 140, height: 14)
+        hintLabel.frame = CGRect(x: 140, y: r.height - 15, width: r.width - 142, height: 14)
+        
+        let trayH: CGFloat = 66
+        scrollView.frame = CGRect(x: 0, y: 0, width: r.width, height: trayH)
+        
+        dropBorderLayer.frame = CGRect(x: 0, y: 0, width: r.width, height: trayH)
+        let path = CGPath(roundedRect: dropBorderLayer.bounds.insetBy(dx: 1, dy: 1), cornerWidth: 12, cornerHeight: 12, transform: nil)
         dropBorderLayer.path = path
         
-        let hintW: CGFloat = min(bounds.width - 20, 230)
-        let hintH: CGFloat = 34
-        dropHintView.frame = CGRect(x: (bounds.width - hintW) / 2.0, y: (bounds.height - hintH) / 2.0, width: hintW, height: hintH)
-        dropHintLabel.frame = CGRect(x: 4, y: 7, width: hintW - 8, height: 20)
+        reloadData()
     }
     
+    public func reloadData() {
+        shelfContainer.subviews.forEach { $0.removeFromSuperview() }
+        let items = AppConfig.shared.shortcuts
+        
+        let itemW: CGFloat = 52
+        let gap: CGFloat = 10
+        let shelfH: CGFloat = 66
+        let totalCount = items.count + 1 // items + add button
+        let totalContentW = max(bounds.width, CGFloat(totalCount) * (itemW + gap) + 12)
+        
+        shelfContainer.frame = CGRect(x: 0, y: 0, width: totalContentW, height: shelfH)
+        
+        for (i, item) in items.enumerated() {
+            let posX = CGFloat(i) * (itemW + gap) + 4
+            let card = createTrayItem(item: item, frame: CGRect(x: posX, y: 0, width: itemW, height: shelfH))
+            shelfContainer.addSubview(card)
+        }
+        
+        // 托盘末尾常驻：＋ 添加按钮
+        let addX = CGFloat(items.count) * (itemW + gap) + 4
+        let addCard = createAddTrayItem(frame: CGRect(x: addX, y: 0, width: itemW, height: shelfH))
+        shelfContainer.addSubview(addCard)
+    }
+    
+    private func createTrayItem(item: CustomShortcut, frame: CGRect) -> NSView {
+        let container = NSView(frame: frame)
+        
+        let iconBtn = ClosureButton(frame: CGRect(x: (frame.width - 40) / 2.0, y: 22, width: 40, height: 40)) { [weak self] in
+            if self?.isEditMode == false {
+                self?.onItemClick?(item)
+            }
+        }
+        iconBtn.wantsLayer = true
+        iconBtn.layer?.cornerRadius = 10
+        iconBtn.layer?.cornerCurve = .continuous
+        iconBtn.layer?.backgroundColor = NSColor(white: 0.14, alpha: 0.70).cgColor
+        iconBtn.layer?.borderWidth = 0.6
+        iconBtn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+        iconBtn.toolTip = "\(item.name) (\(item.displaySubtitle))"
+        
+        iconBtn.onHover = { [weak iconBtn] h in
+            if h {
+                iconBtn?.layer?.backgroundColor = NSColor(white: 0.22, alpha: 0.90).cgColor
+                iconBtn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.28).cgColor
+            } else {
+                iconBtn?.layer?.backgroundColor = NSColor(white: 0.14, alpha: 0.70).cgColor
+                iconBtn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+            }
+        }
+        container.addSubview(iconBtn)
+        
+        let icon = NSWorkspace.shared.icon(forFile: item.path)
+        icon.size = NSSize(width: 26, height: 26)
+        let imgView = NSImageView(frame: CGRect(x: 7, y: 7, width: 26, height: 26))
+        imgView.image = icon
+        iconBtn.addSubview(imgView)
+        
+        let label = NonInteractiveLabel(labelWithString: item.name)
+        label.font = NSFont.systemFont(ofSize: 10, weight: .medium)
+        label.textColor = NSColor(white: 0.85, alpha: 1.0)
+        label.alignment = .center
+        label.lineBreakMode = .byTruncatingTail
+        label.frame = CGRect(x: 0, y: 3, width: frame.width, height: 14)
+        container.addSubview(label)
+        
+        if isEditMode {
+            let del = NSButton()
+            del.title = "✕"
+            del.bezelStyle = .circular
+            del.wantsLayer = true
+            del.contentTintColor = .white
+            del.layer?.backgroundColor = NSColor.systemRed.cgColor
+            del.frame = CGRect(x: frame.width - 16, y: frame.height - 18, width: 14, height: 14)
+            del.font = NSFont.systemFont(ofSize: 8, weight: .bold)
+            del.action = #selector(deleteClicked(_:))
+            del.target = self
+            del.identifier = NSUserInterfaceItemIdentifier(item.id)
+            container.addSubview(del)
+        }
+        
+        return container
+    }
+    
+    private func createAddTrayItem(frame: CGRect) -> NSView {
+        let container = NSView(frame: frame)
+        
+        let addBtn = ClosureButton(frame: CGRect(x: (frame.width - 40) / 2.0, y: 22, width: 40, height: 40)) { [weak self, weak container] in
+            guard let self = self, let c = container else { return }
+            self.onAddClicked?(c)
+        }
+        addBtn.wantsLayer = true
+        addBtn.layer?.cornerRadius = 10
+        addBtn.layer?.cornerCurve = .continuous
+        addBtn.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.40).cgColor
+        addBtn.layer?.borderWidth = 0.8
+        addBtn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
+        addBtn.toolTip = "添加常用应用或文件夹"
+        
+        addBtn.onHover = { [weak addBtn] h in
+            if h {
+                addBtn?.layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.70).cgColor
+                addBtn?.layer?.borderColor = NSColor(red: 0.2, green: 0.65, blue: 1.0, alpha: 0.6).cgColor
+            } else {
+                addBtn?.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.40).cgColor
+                addBtn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
+            }
+        }
+        container.addSubview(addBtn)
+        
+        let plusLabel = NonInteractiveLabel(labelWithString: "＋")
+        plusLabel.font = NSFont.systemFont(ofSize: 18, weight: .light)
+        plusLabel.textColor = NSColor(white: 0.50, alpha: 1.0)
+        plusLabel.alignment = .center
+        plusLabel.frame = CGRect(x: 0, y: 8, width: 40, height: 24)
+        addBtn.addSubview(plusLabel)
+        
+        let label = NonInteractiveLabel(labelWithString: "添加")
+        label.font = NSFont.systemFont(ofSize: 10, weight: .regular)
+        label.textColor = NSColor(white: 0.45, alpha: 1.0)
+        label.alignment = .center
+        label.frame = CGRect(x: 0, y: 3, width: frame.width, height: 14)
+        container.addSubview(label)
+        
+        return container
+    }
+    
+    @objc private func deleteClicked(_ sender: NSButton) {
+        if let id = sender.identifier?.rawValue {
+            onDeleteItem?(id)
+        }
+    }
+    
+    // 拖拽处理
     public override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         if let pasteboard = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !pasteboard.isEmpty {
             isDragOver = true
             dropBorderLayer.isHidden = false
-            dropHintView.isHidden = false
             return .copy
         }
         return []
@@ -703,17 +855,13 @@ public final class NotchShortcutsDropView: NSView {
     public override func draggingExited(_ sender: NSDraggingInfo?) {
         isDragOver = false
         dropBorderLayer.isHidden = true
-        dropHintView.isHidden = true
     }
     
     public override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         isDragOver = false
         dropBorderLayer.isHidden = true
-        dropHintView.isHidden = true
-        
         guard let pasteboard = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL],
               let firstURL = pasteboard.first else { return false }
-        
         onDropURL?(firstURL)
         return true
     }
@@ -736,8 +884,8 @@ public final class NotchUnifiedView: NSView {
     private let rightWingView = NSView()
     private let statusCapsule = CenterStatusCapsule()
     
-    private let shortcutsColumn = NotchShortcutsDropView()
-    private let scratchpadColumn = NotchScratchpadView()
+    private let appTray = NotchAppTrayView()
+    private let scratchpadView = NotchScratchpadView()
     private let footerLabel = NSTextField(labelWithString: "🟢 Apple Silicon 物理传感器就绪 · 移出 0.35s 自动收起 · 按 Esc 退出")
     
     public override init(frame frameRect: NSRect) {
@@ -841,7 +989,7 @@ public final class NotchUnifiedView: NSView {
                 AppConfig.triggerScreenshot(mode: .interactive)
             }
         }
-        shotArea.frame = CGRect(x: 0, y: 0, width: 94, height: 28)
+        shotArea.frame = CGRect(x: 0, y: 0, width: 96, height: 28)
         leftWingView.addSubview(shotArea)
         
         let shotClip = ModernPillButton(title: "📋 复制截屏", tooltip: "截取屏幕并拷贝到剪贴板") { [weak self] in
@@ -850,7 +998,7 @@ public final class NotchUnifiedView: NSView {
                 AppConfig.triggerScreenshot(mode: .toClipboard)
             }
         }
-        shotClip.frame = CGRect(x: 100, y: 0, width: 94, height: 28)
+        shotClip.frame = CGRect(x: 104, y: 0, width: 96, height: 28)
         leftWingView.addSubview(shotClip)
         
         // 右翼功能按钮
@@ -866,26 +1014,37 @@ public final class NotchUnifiedView: NSView {
         let editBtn = ModernPillButton(title: "⚙️ 管理", tooltip: "增删快捷方式") { [weak self] in
             self?.toggleEditMode()
         }
-        editBtn.frame = CGRect(x: 84, y: 0, width: 72, height: 28)
+        editBtn.frame = CGRect(x: 84, y: 0, width: 74, height: 28)
         rightWingView.addSubview(editBtn)
         
         let closeBtn = ModernPillButton(title: "✕", tooltip: "收起刘海面板") { [weak self] in
             self?.onToggle?()
         }
-        closeBtn.frame = CGRect(x: 162, y: 0, width: 34, height: 28)
+        closeBtn.frame = CGRect(x: 164, y: 0, width: 34, height: 28)
         rightWingView.addSubview(closeBtn)
         
-        // 左栏：分类快捷方式（原生支持从访达拖入 App 或文件夹立即添加）
-        shortcutsColumn.onDropURL = { [weak self] url in
+        // 上层：快捷图标托盘
+        appTray.onDropURL = { [weak self] url in
             if let _ = AppConfig.shared.addFromDroppedURL(url) {
-                self?.reloadShortcuts()
+                self?.appTray.reloadData()
                 NSSound.beep()
             }
         }
-        contentContainer.addSubview(shortcutsColumn)
+        appTray.onItemClick = { [weak self] item in
+            AppConfig.openItem(item)
+            self?.onToggle?()
+        }
+        appTray.onAddClicked = { [weak self] view in
+            self?.showAddMenu(from: view)
+        }
+        appTray.onDeleteItem = { [weak self] id in
+            AppConfig.shared.removeShortcut(id: id)
+            self?.appTray.reloadData()
+        }
+        contentContainer.addSubview(appTray)
         
-        // 右栏：随手记
-        contentContainer.addSubview(scratchpadColumn)
+        // 下层：全宽随手记
+        contentContainer.addSubview(scratchpadView)
         
         // 底部微条
         footerLabel.font = NSFont.monospacedSystemFont(ofSize: 9.5, weight: .regular)
@@ -898,196 +1057,56 @@ public final class NotchUnifiedView: NSView {
         let r = bounds
         if r.height < 100 { return }
         
-        // 关键：留出 38pt 物理硬件刘海安全避让区
-        let notchClearance: CGFloat = 38
+        let padX: CGFloat = 16
+        let totalW = r.width - padX * 2
+        let wingW: CGFloat = 204
         let topBarH: CGFloat = 28
-        let topBarY = r.height - notchClearance - topBarH
         
-        leftWingView.frame = CGRect(x: 18, y: topBarY, width: 200, height: topBarH)
-        statusCapsule.frame = CGRect(x: (r.width - 164) / 2.0, y: topBarY, width: 164, height: topBarH)
-        rightWingView.frame = CGRect(x: r.width - 18 - 200, y: topBarY, width: 200, height: topBarH)
+        // 1. 顶部翼展行：直面物理刘海，位于顶端刘海高度内（避开中央 220pt 硬件摄像头禁区）
+        let wingY = r.height - topBarH - 4
+        leftWingView.frame = CGRect(x: padX, y: wingY, width: wingW, height: topBarH)
+        rightWingView.frame = CGRect(x: r.width - padX - wingW, y: wingY, width: wingW, height: topBarH)
         
-        // 主体便当盒布局（黄金分割 47% : 53%）
-        let bodyBottom: CGFloat = 26
-        let bodyTop = topBarY - 14
-        let bodyH: CGFloat = bodyTop - bodyBottom
+        // 2. 硬件开合角度与流体切换微晶药丸（紧贴物理刘海 38pt 下方居中）
+        let notchH: CGFloat = 38
+        let statusH: CGFloat = 26
+        let statusY = r.height - notchH - statusH - 4
+        statusCapsule.frame = CGRect(x: (r.width - 164) / 2.0, y: statusY, width: 164, height: statusH)
         
-        let padX: CGFloat = 18
-        let gap: CGFloat = 14
-        let totalW = r.width - padX * 2 - gap
-        let leftW: CGFloat = round(totalW * 0.47)
-        let rightW: CGFloat = totalW - leftW
+        // 3. 上层：应用图标平滑滚动托盘 (APP TRAY)
+        let trayH: CGFloat = 84
+        let trayY = statusY - 8 - trayH
+        appTray.frame = CGRect(x: padX, y: trayY, width: totalW, height: trayH)
         
-        shortcutsColumn.frame = CGRect(x: padX, y: bodyBottom, width: leftW, height: bodyH)
-        reloadShortcuts()
+        // 4. 下层：全宽沉浸式随手记 (SCRATCHPAD)
+        let scratchpadBottom: CGFloat = 26
+        let scratchpadH = trayY - 10 - scratchpadBottom
+        scratchpadView.frame = CGRect(x: padX, y: scratchpadBottom, width: totalW, height: scratchpadH)
         
-        scratchpadColumn.frame = CGRect(x: padX + leftW + gap, y: bodyBottom, width: rightW, height: bodyH)
-        
+        // 5. 底部居中微条
         footerLabel.frame = CGRect(x: 20, y: 6, width: r.width - 40, height: 14)
     }
     
-    public func reloadShortcuts() {
-        shortcutsColumn.subviews.forEach { $0.removeFromSuperview() }
-        let w = shortcutsColumn.bounds.width
-        let h = shortcutsColumn.bounds.height
-        if w < 100 || h < 100 { return }
+    private func showAddMenu(from sourceView: NSView) {
+        let menu = NSMenu()
+        let appItem = NSMenuItem(title: "＋ 添加常用应用...", action: #selector(menuAddAppClicked), keyEquivalent: "")
+        appItem.target = self
+        menu.addItem(appItem)
         
-        let items = AppConfig.shared.shortcuts
-        let aiItems = items.filter { $0.displaySubtitle == "AI 智能体" }
-        let appItems = items.filter { $0.isApp && $0.displaySubtitle != "AI 智能体" }
-        let folderItems = items.filter { !$0.isApp }
+        let folderItem = NSMenuItem(title: "＋ 添加常用文件夹...", action: #selector(menuAddFolderClicked), keyEquivalent: "")
+        folderItem.target = self
+        menu.addItem(folderItem)
         
-        var currentY = h
-        currentY = renderSection(title: "AI AGENTS", items: aiItems, startY: currentY, containerW: w)
-        currentY = renderSection(title: "FAVORITES", items: appItems, startY: currentY, containerW: w)
-        currentY = renderSection(title: "DIRECTORIES", items: folderItems, startY: currentY, containerW: w, showAddButtons: true)
+        let point = NSPoint(x: sourceView.bounds.midX, y: 0)
+        menu.popUp(positioning: nil, at: point, in: sourceView)
     }
     
-    private func renderSection(title: String, items: [CustomShortcut], startY: CGFloat, containerW: CGFloat, showAddButtons: Bool = false) -> CGFloat {
-        if items.isEmpty && !showAddButtons { return startY }
-        var y = startY
-        
-        let header = NSTextField(labelWithString: title)
-        header.font = NSFont.systemFont(ofSize: 10.0, weight: .semibold)
-        header.textColor = NSColor(white: 0.45, alpha: 1.0)
-        header.frame = CGRect(x: 2, y: y - 16, width: containerW, height: 14)
-        shortcutsColumn.addSubview(header)
-        y -= 20
-        
-        let colCount = 2
-        let itemW = (containerW - 8) / 2.0
-        let itemH: CGFloat = 34
-        
-        for (i, item) in items.enumerated() {
-            let row = i / colCount
-            let col = i % colCount
-            let posX = CGFloat(col) * (itemW + 8)
-            let posY = y - CGFloat(row + 1) * (itemH + 5)
-            if posY < 34 { break }
-            
-            let card = createCompactTile(item: item, frame: CGRect(x: posX, y: posY, width: itemW, height: itemH))
-            shortcutsColumn.addSubview(card)
-        }
-        
-        let rows = (items.count + colCount - 1) / colCount
-        y -= CGFloat(rows) * (itemH + 5)
-        
-        if showAddButtons {
-            let addW = (containerW - 8) / 2.0
-            let addH: CGFloat = 28
-            let addApp = createCompactAction(title: "＋ 添加应用", frame: CGRect(x: 0, y: 0, width: addW, height: addH)) { [weak self] in
-                self?.pickApp()
-            }
-            addApp.toolTip = "选择应用或直接从访达拖入 App"
-            shortcutsColumn.addSubview(addApp)
-            
-            let addFolder = createCompactAction(title: "＋ 添加文件夹", frame: CGRect(x: addW + 8, y: 0, width: addW, height: addH)) { [weak self] in
-                self?.pickFolder()
-            }
-            addFolder.toolTip = "选择文件夹或直接从访达拖入文件夹"
-            shortcutsColumn.addSubview(addFolder)
-        }
-        
-        return y - 4
+    @objc private func menuAddAppClicked() {
+        pickApp()
     }
     
-    private func createCompactTile(item: CustomShortcut, frame: CGRect) -> NSView {
-        let container = NSView(frame: frame)
-        let btn = ClosureButton(frame: CGRect(x: 0, y: 0, width: frame.width, height: frame.height)) { [weak self] in
-            if self?.isEditMode == false {
-                AppConfig.openItem(item)
-                self?.onToggle?()
-            }
-        }
-        btn.wantsLayer = true
-        btn.layer?.cornerRadius = 10
-        btn.layer?.cornerCurve = .continuous
-        btn.layer?.backgroundColor = NSColor(white: 0.13, alpha: 0.70).cgColor
-        btn.layer?.borderWidth = 0.6
-        btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
-        
-        btn.onHover = { [weak btn] hovered in
-            if hovered {
-                btn?.layer?.backgroundColor = NSColor(white: 0.18, alpha: 0.85).cgColor
-                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.22).cgColor
-            } else {
-                btn?.layer?.backgroundColor = NSColor(white: 0.13, alpha: 0.70).cgColor
-                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
-            }
-        }
-        container.addSubview(btn)
-        
-        let icon = NSWorkspace.shared.icon(forFile: item.path)
-        icon.size = NSSize(width: 20, height: 20)
-        let imgView = NSImageView(frame: CGRect(x: 7, y: (frame.height - 20) / 2.0, width: 20, height: 20))
-        imgView.image = icon
-        btn.addSubview(imgView)
-        
-        let textX: CGFloat = 33
-        let textW: CGFloat = frame.width - textX - 6
-        
-        let titleLabel = NonInteractiveLabel(labelWithString: item.name)
-        titleLabel.font = NSFont.systemFont(ofSize: 11.5, weight: .medium)
-        titleLabel.textColor = NSColor(white: 0.95, alpha: 1.0)
-        titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.frame = CGRect(x: textX, y: 16, width: textW, height: 14)
-        btn.addSubview(titleLabel)
-        
-        let subLabel = NonInteractiveLabel(labelWithString: item.displaySubtitle)
-        subLabel.font = NSFont.systemFont(ofSize: 8.5, weight: .regular)
-        subLabel.textColor = NSColor(white: 0.48, alpha: 1.0)
-        subLabel.frame = CGRect(x: textX, y: 3, width: textW, height: 12)
-        btn.addSubview(subLabel)
-        
-        if isEditMode {
-            let del = NSButton()
-            del.title = "✕"
-            del.bezelStyle = .circular
-            del.wantsLayer = true
-            del.contentTintColor = .white
-            del.layer?.backgroundColor = NSColor.systemRed.cgColor
-            del.frame = CGRect(x: frame.width - 22, y: (frame.height - 16) / 2.0, width: 16, height: 16)
-            del.target = self
-            del.action = #selector(deleteItemClicked(_:))
-            del.identifier = NSUserInterfaceItemIdentifier(item.id)
-            container.addSubview(del)
-        }
-        return container
-    }
-    
-    private func createCompactAction(title: String, frame: CGRect, action: @escaping () -> Void) -> NSView {
-        let btn = ClosureButton(frame: frame, action: action)
-        btn.wantsLayer = true
-        btn.layer?.cornerRadius = 9
-        btn.layer?.cornerCurve = .continuous
-        btn.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.50).cgColor
-        btn.layer?.borderWidth = 0.8
-        btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
-        
-        btn.onHover = { [weak btn] hovered in
-            if hovered {
-                btn?.layer?.backgroundColor = NSColor(white: 0.14, alpha: 0.70).cgColor
-                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.25).cgColor
-            } else {
-                btn?.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.50).cgColor
-                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
-            }
-        }
-        
-        let label = NonInteractiveLabel(labelWithString: title)
-        label.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
-        label.textColor = NSColor(white: 0.60, alpha: 1.0)
-        label.alignment = .center
-        label.frame = CGRect(x: 0, y: (frame.height - 15) / 2.0, width: frame.width, height: 15)
-        btn.addSubview(label)
-        return btn
-    }
-    
-    @objc private func deleteItemClicked(_ sender: NSButton) {
-        if let id = sender.identifier?.rawValue {
-            AppConfig.shared.removeShortcut(id: id)
-            reloadShortcuts()
-        }
+    @objc private func menuAddFolderClicked() {
+        pickFolder()
     }
     
     private func pickApp() {
@@ -1098,7 +1117,7 @@ public final class NotchUnifiedView: NSView {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         if panel.runModal() == .OK, let u = panel.url {
             AppConfig.shared.addShortcut(name: u.deletingPathExtension().lastPathComponent, path: u.path, subtitle: "自定义应用", isApp: true)
-            reloadShortcuts()
+            appTray.reloadData()
         }
     }
     
@@ -1110,13 +1129,13 @@ public final class NotchUnifiedView: NSView {
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let u = panel.url {
             AppConfig.shared.addShortcut(name: u.lastPathComponent, path: u.path, subtitle: "本地文件夹", isApp: false)
-            reloadShortcuts()
+            appTray.reloadData()
         }
     }
     
     private func toggleEditMode() {
         isEditMode.toggle()
-        reloadShortcuts()
+        appTray.isEditMode = isEditMode
     }
     
     public func updateAngle(_ angle: Double) {
@@ -1140,7 +1159,7 @@ public final class NotchUnifiedView: NSView {
     public func finishExpansion() {
         contentContainer.isHidden = false
         contentContainer.alphaValue = 1.0
-        scratchpadColumn.focusInput() // 展开后自动聚焦随手记输入框，支持直接输入
+        scratchpadView.focusInput() // 展开后自动聚焦随手记输入框，支持直接输入
     }
     
     public func prepareForCollapse() {
@@ -1158,6 +1177,7 @@ public final class NotchUnifiedView: NSView {
 
 // ─── 允许打字、获得焦点并拦截 Esc 的专属文本框 ───
 public final class ScratchpadTextView: NSTextView {
+    public var onCommandEnter: (() -> Void)?
     public override var acceptsFirstResponder: Bool { true }
     public override var canBecomeKeyView: Bool { true }
     
@@ -1169,6 +1189,16 @@ public final class ScratchpadTextView: NSTextView {
     
     public override func cancelOperation(_ sender: Any?) {
         NotchController.shared.collapse()
+    }
+    
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) && (event.keyCode == 36 || event.charactersIgnoringModifiers == "\r" || event.charactersIgnoringModifiers == "\n") {
+            if let cb = onCommandEnter {
+                cb()
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
     }
 }
 
@@ -1248,6 +1278,9 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         textView.isSelectable = true
         textView.insertionPointColor = NSColor.white
         textView.delegate = self
+        textView.onCommandEnter = { [weak self] in
+            self?.saveAndNewNote()
+        }
         
         textView.minSize = NSSize(width: 0.0, height: 200)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -1300,7 +1333,7 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         addSubview(del)
         self.deleteBtn = del
         
-        let save = AccentActionButton(title: "存入备忘录 ↵", tooltip: "保存到 Apple Notes 备忘录并开启全新空白页") { [weak self] in
+        let save = AccentActionButton(title: "存入备忘录 ↵", tooltip: "保存到 Apple Notes 备忘录并开启全新空白页 (⌘+Enter)") { [weak self] in
             self?.saveAndNewNote()
         }
         addSubview(save)
@@ -1308,7 +1341,7 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         
         statusFeedbackLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
         statusFeedbackLabel.textColor = NSColor.systemGreen
-        statusFeedbackLabel.alignment = .right
+        statusFeedbackLabel.alignment = .center
         statusFeedbackLabel.alphaValue = 0.0
         addSubview(statusFeedbackLabel)
     }
@@ -1343,8 +1376,8 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         
         let btnH: CGFloat = 28
         deleteBtn?.frame = CGRect(x: 0, y: 0, width: 64, height: btnH)
-        saveAddBtn?.frame = CGRect(x: 72, y: 0, width: 136, height: btnH)
-        statusFeedbackLabel.frame = CGRect(x: 216, y: 5, width: r.width - 220, height: 18)
+        saveAddBtn?.frame = CGRect(x: r.width - 136, y: 0, width: 136, height: btnH)
+        statusFeedbackLabel.frame = CGRect(x: 74, y: 5, width: max(50, r.width - 74 - 146), height: 18)
     }
     
     public func focusInput() {
@@ -1429,6 +1462,10 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
     }
     
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.contains(.command) && (event.keyCode == 36 || event.charactersIgnoringModifiers == "\r" || event.charactersIgnoringModifiers == "\n") {
+            saveAndNewNote()
+            return true
+        }
         if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers?.lowercased() == "v" {
             let pb = NSPasteboard.general
             if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], let u = urls.first {
