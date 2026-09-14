@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>NotchFold UI Redesign Proposal</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #141416 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="%2322222a" stop-opacity="0.3"/><stop offset="100%" stop-color="%23141416" stop-opacity="0.9"/></radialGradient></defs><rect width="100" height="100" fill="url(%23g)"/></svg>');
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+    color: #fff;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 模拟物理刘海 */
+  .mac-notch-mock {
+    width: 210px;
+    height: 34px;
+    background: #000;
+    border-radius: 0 0 16px 16px;
+    margin-bottom: -34px;
+    z-index: 100;
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  /* 主面板外框 */
+  .notch-island {
+    width: 680px;
+    height: 460px;
+    background: rgba(18, 18, 22, 0.88);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border-radius: 0 0 28px 28px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-top: none;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 2px 10px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* 顶部硬件避让与统一工具条 */
+  .island-header {
+    height: 82px;
+    padding-top: 38px; /* 避开物理刘海 */
+    padding-left: 20px;
+    padding-right: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: linear-gradient(to bottom, rgba(0,0,0,0.4), transparent);
+  }
+
+  .header-left, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tool-btn {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 11.5px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .tool-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    transform: translateY(-0.5px);
+  }
+
+  /* 中间微晶药丸 */
+  .center-pill {
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 13px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.7);
+  }
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #30d158;
+    box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
+  }
+  .effect-select-tag {
+    color: #389fff;
+    font-weight: 600;
+    background: rgba(56, 159, 255, 0.12);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 10px;
+  }
+
+  /* 核心主体：黄金比例便当盒 */
+  .island-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 310px 1fr;
+    gap: 16px;
+    padding: 18px 20px 12px 20px;
+  }
+
+  /* 左侧：快捷启动中枢 */
+  .hub-column {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .tiles-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .tile-card {
+    height: 38px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .tile-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.18);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  }
+
+  .tile-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    background: rgba(255,255,255,0.08);
+  }
+  .tile-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 拖拽吸附虚线区 */
+  .drop-zone {
+    border: 1.5px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 8px;
+    text-align: center;
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.015);
+    transition: all 0.2s ease;
+  }
+  .drop-zone:hover {
+    border-color: rgba(56, 159, 255, 0.4);
+    color: rgba(56, 159, 255, 0.8);
+    background: rgba(56, 159, 255, 0.04);
+  }
+
+  /* 右侧：灵感随手记 */
+  .note-column {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    padding: 14px;
+    position: relative;
+  }
+
+  .note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .note-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .note-hint {
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  .note-editor {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: rgba(255, 255, 255, 0.9);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: none;
+  }
+  .note-editor::placeholder {
+    color: rgba(255, 255, 255, 0.22);
+  }
+
+  /* 底部精细工具条 */
+  .note-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .footer-left-info {
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.35);
+  }
+  .action-btn-group {
+    display: flex;
+    gap: 8px;
+  }
+  .ghost-btn {
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .ghost-btn:hover {
+    color: #ff453a;
+    border-color: rgba(255, 69, 58, 0.3);
+    background: rgba(255, 69, 58, 0.08);
+  }
+  .save-notes-btn {
+    height: 26px;
+    padding: 0 12px;
+    border-radius: 8px;
+    background: rgba(10, 132, 255, 0.2);
+    border: 1px solid rgba(10, 132, 255, 0.4);
+    color: #64d2ff;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+  }
+  .save-notes-btn:hover {
+    background: rgba(10, 132, 255, 0.35);
+    border-color: rgba(10, 132, 255, 0.6);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(10, 132, 255, 0.3);
+  }
+
+  /* 底部状态微条 */
+  .island-status-bar {
+    height: 24px;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.35);
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+  }
+</style>
+</head>
+<body>
+
+<!-- 模拟真实硬件刘海 -->
+<div class="mac-notch-mock"></div>
+
+<!-- 升级后拟态黑琉璃面板 -->
+<div class="notch-island">
+  <!-- 顶栏：安全避开刘海，信息克制高级 -->
+  <div class="island-header">
+    <div class="header-left">
+      <button class="tool-btn">📸 选区截图</button>
+      <button class="tool-btn">📋 复制截屏</button>
+    </div>
+    
+    <div class="center-pill">
+      <span class="status-dot"></span>
+      <span>铰链 105°</span>
+      <span class="effect-select-tag">Flex 流体 ▾</span>
+    </div>
+
+    <div class="header-right">
+      <button class="tool-btn">🌀 演练</button>
+      <button class="tool-btn">⚙️ 设置</button>
+      <button class="tool-btn" style="padding: 0 8px;">✕</button>
+    </div>
+  </div>
+
+  <!-- 核心双栏主体 -->
+  <div class="island-body">
+    <!-- 左栏：高质感应用中枢 -->
+    <div class="hub-column">
+      <div>
+        <div class="section-label">AI 智能体</div>
+        <div class="tiles-grid">
+          <div class="tile-card">
+            <div class="tile-icon" style="background:#10a37f22; color:#10a37f;">⚡</div>
+            <div class="tile-name">ChatGPT</div>
+          </div>
+          <div class="tile-card">
+            <div class="tile-icon" style="background:#3b82f622; color:#60a5fa;">✦</div>
+            <div class="tile-name">Gemini</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">常用应用</div>
+        <div class="tiles-grid">
+          <div class="tile-card">
+            <div class="tile-icon">🌐</div>
+            <div class="tile-name">Chrome</div>
+          </div>
+          <div class="tile-card">
+            <div class="tile-icon">🧭</div>
+            <div class="tile-name">Safari</div>
+          </div>
+          <div class="tile-card">
+            <div class="tile-icon">💬</div>
+            <div class="tile-name">微信</div>
+          </div>
+          <div class="tile-card">
+            <div class="tile-icon">⌨️</div>
+            <div class="tile-name">系统终端</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">常用目录</div>
+        <div class="tiles-grid">
+          <div class="tile-card">
+            <div class="tile-icon">📂</div>
+            <div class="tile-name">下载</div>
+          </div>
+          <div class="tile-card">
+            <div class="tile-icon">💻</div>
+            <div class="tile-name">代码仓库</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="drop-zone">
+        ＋ 拖入任意 App 或文件夹至此添加
+      </div>
+    </div>
+
+    <!-- 右栏：极简沉浸随手记 -->
+    <div class="note-column">
+      <div class="note-header">
+        <span class="note-title">📝 灵感随手记</span>
+        <span class="note-hint">支持 ⌘V 贴图 · 拖入文件</span>
+      </div>
+
+      <textarea class="note-editor" placeholder="在此快速输入随想、待办，或按 ⌘V 粘贴截图..."></textarea>
+
+      <div class="note-footer">
+        <span class="footer-left-info">光标就绪 · 自动暂存</span>
+        <div class="action-btn-group">
+          <button class="ghost-btn">清空</button>
+          <button class="save-notes-btn">存入系统备忘录 ↵</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部微条 -->
+  <div class="island-status-bar">
+    <span>Apple Silicon 物理传感器就绪</span>
+    <span>鼠标移出 0.35s 自动收起 · 按 Esc 退出</span>
+  </div>
+</div>
+
+</body>
+</html>

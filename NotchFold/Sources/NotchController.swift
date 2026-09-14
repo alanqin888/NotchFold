@@ -61,14 +61,14 @@ public class ModernPillButton: NSButton {
     public init(title: String, tooltip: String = "", fontSize: CGFloat = 11.5, isDestructive: Bool = false, isAccent: Bool = false, action: @escaping () -> Void) {
         self.actionClosure = action
         if isDestructive {
-            self.normalBg = NSColor(red: 0.85, green: 0.20, blue: 0.20, alpha: 0.85)
-            self.hoverBg = NSColor(red: 0.95, green: 0.25, blue: 0.25, alpha: 1.0)
+            self.normalBg = NSColor(red: 0.85, green: 0.20, blue: 0.20, alpha: 0.25)
+            self.hoverBg = NSColor(red: 0.95, green: 0.25, blue: 0.25, alpha: 0.45)
         } else if isAccent {
-            self.normalBg = NSColor(red: 0.15, green: 0.55, blue: 0.95, alpha: 0.88)
-            self.hoverBg = NSColor(red: 0.20, green: 0.65, blue: 1.0, alpha: 1.0)
+            self.normalBg = NSColor(red: 0.10, green: 0.50, blue: 0.95, alpha: 0.25)
+            self.hoverBg = NSColor(red: 0.15, green: 0.60, blue: 1.0, alpha: 0.40)
         } else {
-            self.normalBg = NSColor(white: 0.18, alpha: 0.85)
-            self.hoverBg = NSColor(white: 0.28, alpha: 0.95)
+            self.normalBg = NSColor(white: 0.18, alpha: 0.55)
+            self.hoverBg = NSColor(white: 0.28, alpha: 0.80)
         }
         
         super.init(frame: .zero)
@@ -77,10 +77,11 @@ public class ModernPillButton: NSButton {
         self.toolTip = tooltip
         self.isBordered = false
         self.wantsLayer = true
-        self.layer?.cornerRadius = 13
+        self.layer?.cornerRadius = 14
+        self.layer?.cornerCurve = .continuous
         self.layer?.backgroundColor = normalBg.cgColor
-        self.layer?.borderWidth = 1.0
-        self.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
+        self.layer?.borderWidth = 0.8
+        self.layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
         
         setCenteredTitle(title, fontSize: fontSize)
         
@@ -92,11 +93,11 @@ public class ModernPillButton: NSButton {
     
     public func setAccent(_ accent: Bool) {
         if accent {
-            self.normalBg = NSColor(red: 0.15, green: 0.55, blue: 0.95, alpha: 0.88)
-            self.hoverBg = NSColor(red: 0.20, green: 0.65, blue: 1.0, alpha: 1.0)
+            self.normalBg = NSColor(red: 0.10, green: 0.50, blue: 0.95, alpha: 0.35)
+            self.hoverBg = NSColor(red: 0.15, green: 0.60, blue: 1.0, alpha: 0.55)
         } else {
-            self.normalBg = NSColor(white: 0.18, alpha: 0.85)
-            self.hoverBg = NSColor(white: 0.28, alpha: 0.95)
+            self.normalBg = NSColor(white: 0.18, alpha: 0.55)
+            self.hoverBg = NSColor(white: 0.28, alpha: 0.80)
         }
         self.layer?.backgroundColor = isHovered ? hoverBg.cgColor : normalBg.cgColor
     }
@@ -106,7 +107,7 @@ public class ModernPillButton: NSButton {
         style.alignment = .center
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .medium),
-            .foregroundColor: NSColor.white,
+            .foregroundColor: NSColor(white: 0.92, alpha: 1.0),
             .paragraphStyle: style
         ]
         self.attributedTitle = NSAttributedString(string: text, attributes: attrs)
@@ -115,15 +116,238 @@ public class ModernPillButton: NSButton {
     public override func mouseEntered(with event: NSEvent) {
         isHovered = true
         layer?.backgroundColor = hoverBg.cgColor
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.24).cgColor
     }
     
     public override func mouseExited(with event: NSEvent) {
         isHovered = false
         layer?.backgroundColor = normalBg.cgColor
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
     }
     
     @objc private func buttonClicked() {
         actionClosure?()
+    }
+}
+
+// ─── 幽灵微边框操作按钮（清空等低优先级操作）───
+public class GhostActionButton: NSButton {
+    private var actionClosure: (() -> Void)?
+    private var isHovered = false
+    private let titleText: String
+    
+    public init(title: String, tooltip: String = "", action: @escaping () -> Void) {
+        self.actionClosure = action
+        self.titleText = title
+        super.init(frame: .zero)
+        self.target = self
+        self.action = #selector(buttonClicked)
+        self.toolTip = tooltip
+        self.isBordered = false
+        self.wantsLayer = true
+        self.layer?.cornerRadius = 7
+        self.layer?.cornerCurve = .continuous
+        self.layer?.backgroundColor = NSColor.clear.cgColor
+        self.layer?.borderWidth = 0.8
+        self.layer?.borderColor = NSColor(white: 1.0, alpha: 0.10).cgColor
+        
+        updateTitle()
+        
+        let trackingArea = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        self.addTrackingArea(trackingArea)
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    private func updateTitle() {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: isHovered ? NSColor(red: 1.0, green: 0.35, blue: 0.3, alpha: 0.95) : NSColor(white: 0.55, alpha: 1.0),
+            .paragraphStyle: style
+        ]
+        self.attributedTitle = NSAttributedString(string: titleText, attributes: attrs)
+    }
+    
+    public override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        layer?.backgroundColor = NSColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.08).cgColor
+        layer?.borderColor = NSColor(red: 0.9, green: 0.2, blue: 0.2, alpha: 0.30).cgColor
+        updateTitle()
+    }
+    
+    public override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.10).cgColor
+        updateTitle()
+    }
+    
+    @objc private func buttonClicked() {
+        actionClosure?()
+    }
+}
+
+// ─── 柔蓝微光主操作按钮（存入备忘录）───
+public class AccentActionButton: NSButton {
+    private var actionClosure: (() -> Void)?
+    private var isHovered = false
+    private let titleText: String
+    
+    public init(title: String, tooltip: String = "", action: @escaping () -> Void) {
+        self.actionClosure = action
+        self.titleText = title
+        super.init(frame: .zero)
+        self.target = self
+        self.action = #selector(buttonClicked)
+        self.toolTip = tooltip
+        self.isBordered = false
+        self.wantsLayer = true
+        self.layer?.cornerRadius = 7
+        self.layer?.cornerCurve = .continuous
+        self.layer?.backgroundColor = NSColor(red: 0.05, green: 0.45, blue: 0.95, alpha: 0.22).cgColor
+        self.layer?.borderWidth = 0.8
+        self.layer?.borderColor = NSColor(red: 0.15, green: 0.55, blue: 1.0, alpha: 0.45).cgColor
+        
+        updateTitle()
+        
+        let trackingArea = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        self.addTrackingArea(trackingArea)
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    private func updateTitle() {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: isHovered ? NSColor.white : NSColor(red: 0.45, green: 0.82, blue: 1.0, alpha: 1.0),
+            .paragraphStyle: style
+        ]
+        self.attributedTitle = NSAttributedString(string: titleText, attributes: attrs)
+    }
+    
+    public override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        layer?.backgroundColor = NSColor(red: 0.05, green: 0.45, blue: 0.95, alpha: 0.38).cgColor
+        layer?.borderColor = NSColor(red: 0.20, green: 0.65, blue: 1.0, alpha: 0.65).cgColor
+        updateTitle()
+    }
+    
+    public override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        layer?.backgroundColor = NSColor(red: 0.05, green: 0.45, blue: 0.95, alpha: 0.22).cgColor
+        layer?.borderColor = NSColor(red: 0.15, green: 0.55, blue: 1.0, alpha: 0.45).cgColor
+        updateTitle()
+    }
+    
+    @objc private func buttonClicked() {
+        actionClosure?()
+    }
+}
+
+// ─── 顶栏中央微晶状态药丸（整合传感器角度与流体效果快速切换）───
+public final class CenterStatusCapsule: NSView {
+    public var onEffectChanged: ((FoldEffect) -> Void)?
+    private var angle: Double = 105.0
+    private let statusDot = CALayer()
+    private let textLabel = NSTextField()
+    private var isHovered = false
+    
+    public override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 14
+        layer?.cornerCurve = .continuous
+        layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.6).cgColor
+        layer?.borderWidth = 0.8
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
+        
+        statusDot.backgroundColor = NSColor(red: 0.2, green: 0.85, blue: 0.4, alpha: 1.0).cgColor
+        statusDot.cornerRadius = 3.5
+        layer?.addSublayer(statusDot)
+        
+        textLabel.isBezeled = false
+        textLabel.drawsBackground = false
+        textLabel.isEditable = false
+        textLabel.isSelectable = false
+        addSubview(textLabel)
+        
+        updateDisplay()
+        
+        let trackingArea = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        addTrackingArea(trackingArea)
+    }
+    
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    public override func layout() {
+        super.layout()
+        statusDot.frame = CGRect(x: 10, y: (bounds.height - 7) / 2.0, width: 7, height: 7)
+        textLabel.frame = CGRect(x: 23, y: (bounds.height - 18) / 2.0, width: bounds.width - 28, height: 18)
+    }
+    
+    public func setAngle(_ newAngle: Double) {
+        self.angle = newAngle
+        updateDisplay()
+    }
+    
+    public func updateDisplay() {
+        let effName = AppConfig.shared.selectedEffect.rawValue.capitalized
+        let attr = NSMutableAttributedString()
+        
+        let angleStr = NSAttributedString(
+            string: String(format: "铰链 %.0f°", angle),
+            attributes: [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor(white: 0.85, alpha: 1.0)
+            ]
+        )
+        let dotStr = NSAttributedString(
+            string: " · ",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .regular),
+                .foregroundColor: NSColor(white: 0.4, alpha: 1.0)
+            ]
+        )
+        let effStr = NSAttributedString(
+            string: "\(effName) ▾",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 10.5, weight: .semibold),
+                .foregroundColor: NSColor(red: 0.35, green: 0.75, blue: 1.0, alpha: 1.0)
+            ]
+        )
+        
+        attr.append(angleStr)
+        attr.append(dotStr)
+        attr.append(effStr)
+        textLabel.attributedStringValue = attr
+    }
+    
+    public override func mouseEntered(with event: NSEvent) {
+        isHovered = true
+        layer?.backgroundColor = NSColor(white: 0.24, alpha: 0.85).cgColor
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.28).cgColor
+    }
+    
+    public override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        layer?.backgroundColor = NSColor(white: 0.15, alpha: 0.6).cgColor
+        layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
+    }
+    
+    public override func mouseDown(with event: NSEvent) {
+        let all: [FoldEffect] = [.flex, .duo, .roll, .shutter, .iris]
+        let cur = AppConfig.shared.selectedEffect
+        if let idx = all.firstIndex(of: cur) {
+            let next = all[(idx + 1) % all.count]
+            AppConfig.shared.selectedEffect = next
+            updateDisplay()
+            onEffectChanged?(next)
+            NSSound.beep()
+        }
     }
 }
 
@@ -283,7 +507,29 @@ public final class NotchController: NSObject {
     private func createStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let btn = statusItem?.button {
-            btn.title = "📱"
+            let iconImage = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+                // 绘制极客刘海与折叠屏拟态微图标
+                let outline = NSBezierPath(roundedRect: NSRect(x: 2.5, y: 3.5, width: 13, height: 11), xRadius: 2.5, yRadius: 2.5)
+                outline.lineWidth = 1.2
+                NSColor.labelColor.setStroke()
+                outline.stroke()
+                
+                // 顶部刘海特征
+                let notchPath = NSBezierPath(roundedRect: NSRect(x: 6.5, y: 10.5, width: 5, height: 3.5), xRadius: 1, yRadius: 1)
+                NSColor.labelColor.setFill()
+                notchPath.fill()
+                
+                // 中轴折痕微线
+                let foldLine = NSBezierPath()
+                foldLine.move(to: NSPoint(x: 2.5, y: 8.5))
+                foldLine.line(to: NSPoint(x: 15.5, y: 8.5))
+                foldLine.lineWidth = 0.8
+                foldLine.stroke()
+                return true
+            }
+            iconImage.isTemplate = true
+            btn.image = iconImage
+            btn.title = ""
             btn.toolTip = "展开 NotchFold 纯黑灵动刘海中心"
             btn.target = self
             btn.action = #selector(statusItemClicked)
@@ -313,8 +559,8 @@ public final class NotchController: NSObject {
         let m = NotchScreenManager.getNotchMetrics()
         let s = m.screen
         
-        let expandedW: CGFloat = 660
-        let expandedH: CGFloat = 450
+        let expandedW: CGFloat = 680
+        let expandedH: CGFloat = 475
         let targetX = s.frame.origin.x + (s.frame.width - expandedW) / 2.0
         let targetY = s.frame.origin.y + s.frame.height - expandedH
         let targetFrame = CGRect(x: targetX, y: targetY, width: expandedW, height: expandedH)
@@ -369,8 +615,8 @@ public final class NotchController: NSObject {
         guard let panel = notchWindow else { return }
         let m = NotchScreenManager.getNotchMetrics()
         if isExpanded {
-            let expandedW: CGFloat = 660
-            let expandedH: CGFloat = 450
+            let expandedW: CGFloat = 680
+            let expandedH: CGFloat = 460
             let targetX = m.screen.frame.origin.x + (m.screen.frame.width - expandedW) / 2.0
             let targetY = m.screen.frame.origin.y + m.screen.frame.height - expandedH
             panel.setFrame(CGRect(x: targetX, y: targetY, width: expandedW, height: expandedH), display: true)
@@ -477,7 +723,9 @@ public final class NotchShortcutsDropView: NSView {
 public final class NotchUnifiedView: NSView {
     public var onToggle: (() -> Void)?
     
-    private let pureBlackBg = CALayer()
+    // 液态暗黑毛玻璃底层与高光
+    private let visualEffectView = NSVisualEffectView()
+    private let glassTintLayer = CALayer()
     private let capsuleIndicator = CALayer()
     
     private let contentContainer = NSView()
@@ -486,21 +734,17 @@ public final class NotchUnifiedView: NSView {
     
     private let leftWingView = NSView()
     private let rightWingView = NSView()
-    private let centerNotchTitle = NSTextField(labelWithString: "iPhone Duo")
-    
-    private let effectBar = NSView()
-    private let effectLabel = NonInteractiveLabel(labelWithString: "流体效果:")
-    private var effectPills: [ModernPillButton] = []
+    private let statusCapsule = CenterStatusCapsule()
     
     private let shortcutsColumn = NotchShortcutsDropView()
     private let scratchpadColumn = NotchScratchpadView()
-    private let footerLabel = NSTextField(labelWithString: "🟢 硬件传感器就绪 · 移出自动收起 · Esc关闭")
+    private let footerLabel = NSTextField(labelWithString: "🟢 Apple Silicon 物理传感器就绪 · 移出 0.35s 自动收起 · 按 Esc 退出")
     
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         autoresizingMask = [.width, .height]
         wantsLayer = true
-        setupPureBlackAppearance()
+        setupGlassAppearance()
         setupContentHierarchy()
     }
     
@@ -535,19 +779,30 @@ public final class NotchUnifiedView: NSView {
         NotchController.shared.collapse()
     }
     
-    private func setupPureBlackAppearance() {
+    private func setupGlassAppearance() {
         guard let root = layer else { return }
         root.backgroundColor = NSColor.clear.cgColor
         
-        // 顶部严禁使用圆角！顶边 0 圆角完全平直，底边优雅 26pt 大圆角
-        root.addSublayer(pureBlackBg)
-        pureBlackBg.backgroundColor = NSColor.black.cgColor
-        pureBlackBg.borderWidth = 1.0
-        pureBlackBg.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
-        pureBlackBg.cornerCurve = .continuous
-        pureBlackBg.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        pureBlackBg.cornerRadius = 26
+        // 1. 深度暗黑毛玻璃底层（原生 HUD 质感）
+        visualEffectView.material = .hudWindow
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.state = .active
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 26
+        visualEffectView.layer?.cornerCurve = .continuous
+        visualEffectView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        addSubview(visualEffectView, positioned: .below, relativeTo: nil)
         
+        // 2. 亚克力暗黑微晶遮罩层（透出底层壁纸微光，保持纯正暗黑沉浸）
+        visualEffectView.layer?.addSublayer(glassTintLayer)
+        glassTintLayer.backgroundColor = NSColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 0.78).cgColor
+        glassTintLayer.borderWidth = 0.6
+        glassTintLayer.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
+        glassTintLayer.cornerRadius = 26
+        glassTintLayer.cornerCurve = .continuous
+        glassTintLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        
+        // 3. 收起状态小白条指示器
         root.addSublayer(capsuleIndicator)
         capsuleIndicator.backgroundColor = NSColor(white: 1.0, alpha: 0.45).cgColor
         capsuleIndicator.cornerRadius = 2
@@ -560,9 +815,13 @@ public final class NotchUnifiedView: NSView {
     public override func layout() {
         super.layout()
         let r = bounds
-        pureBlackBg.frame = r
-        pureBlackBg.cornerRadius = r.height > 100 ? 26 : 10
-        pureBlackBg.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        visualEffectView.frame = r
+        visualEffectView.layer?.cornerRadius = r.height > 100 ? 26 : 10
+        visualEffectView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        
+        glassTintLayer.frame = r
+        glassTintLayer.cornerRadius = r.height > 100 ? 26 : 10
+        glassTintLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         
         capsuleIndicator.frame = CGRect(x: (r.width - 36) / 2.0, y: 8, width: 36, height: 4)
         
@@ -572,21 +831,17 @@ public final class NotchUnifiedView: NSView {
     
     private func setupContentHierarchy() {
         contentContainer.addSubview(leftWingView)
+        contentContainer.addSubview(statusCapsule)
         contentContainer.addSubview(rightWingView)
         
-        centerNotchTitle.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        centerNotchTitle.textColor = NSColor(white: 0.45, alpha: 1.0)
-        centerNotchTitle.alignment = .center
-        contentContainer.addSubview(centerNotchTitle)
-        
-        // 左翼功能按钮（文本绝对垂直居中，杜绝错位）
+        // 左翼功能按钮（微晶磨砂胶囊）
         let shotArea = ModernPillButton(title: "📸 选区截图", tooltip: "框选屏幕区域保存到桌面") { [weak self] in
             self?.onToggle?()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
                 AppConfig.triggerScreenshot(mode: .interactive)
             }
         }
-        shotArea.frame = CGRect(x: 0, y: 0, width: 104, height: 28)
+        shotArea.frame = CGRect(x: 0, y: 0, width: 94, height: 28)
         leftWingView.addSubview(shotArea)
         
         let shotClip = ModernPillButton(title: "📋 复制截屏", tooltip: "截取屏幕并拷贝到剪贴板") { [weak self] in
@@ -595,34 +850,30 @@ public final class NotchUnifiedView: NSView {
                 AppConfig.triggerScreenshot(mode: .toClipboard)
             }
         }
-        shotClip.frame = CGRect(x: 110, y: 0, width: 104, height: 28)
+        shotClip.frame = CGRect(x: 100, y: 0, width: 94, height: 28)
         leftWingView.addSubview(shotClip)
         
         // 右翼功能按钮
-        let foldDemo = ModernPillButton(title: "🌀 折叠演练", tooltip: "全屏运行 5 秒 Metal 流体折叠演练") { [weak self] in
+        let foldDemo = ModernPillButton(title: "🌀 演练", tooltip: "全屏运行 5 秒 Metal 流体折叠演练") { [weak self] in
             self?.onToggle?()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 FoldWindowController.shared.manualDemoSequence()
             }
         }
-        foldDemo.frame = CGRect(x: 0, y: 0, width: 98, height: 28)
+        foldDemo.frame = CGRect(x: 0, y: 0, width: 78, height: 28)
         rightWingView.addSubview(foldDemo)
         
         let editBtn = ModernPillButton(title: "⚙️ 管理", tooltip: "增删快捷方式") { [weak self] in
             self?.toggleEditMode()
         }
-        editBtn.frame = CGRect(x: 104, y: 0, width: 68, height: 28)
+        editBtn.frame = CGRect(x: 84, y: 0, width: 72, height: 28)
         rightWingView.addSubview(editBtn)
         
         let closeBtn = ModernPillButton(title: "✕", tooltip: "收起刘海面板") { [weak self] in
             self?.onToggle?()
         }
-        closeBtn.frame = CGRect(x: 178, y: 0, width: 36, height: 28)
+        closeBtn.frame = CGRect(x: 162, y: 0, width: 34, height: 28)
         rightWingView.addSubview(closeBtn)
-        
-        // 效果切换条
-        setupEffectBar()
-        contentContainer.addSubview(effectBar)
         
         // 左栏：分类快捷方式（原生支持从访达拖入 App 或文件夹立即添加）
         shortcutsColumn.onDropURL = { [weak self] url in
@@ -636,89 +887,43 @@ public final class NotchUnifiedView: NSView {
         // 右栏：随手记
         contentContainer.addSubview(scratchpadColumn)
         
-        // 底部
-        footerLabel.font = NSFont.monospacedSystemFont(ofSize: 10.5, weight: .regular)
-        footerLabel.textColor = NSColor(white: 0.45, alpha: 1.0)
+        // 底部微条
+        footerLabel.font = NSFont.monospacedSystemFont(ofSize: 9.5, weight: .regular)
+        footerLabel.textColor = NSColor(white: 0.40, alpha: 1.0)
         footerLabel.alignment = .center
         contentContainer.addSubview(footerLabel)
-    }
-    
-    private func setupEffectBar() {
-        effectLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
-        effectLabel.textColor = NSColor(white: 0.50, alpha: 1.0)
-        effectBar.addSubview(effectLabel)
-        
-        let effects: [(FoldEffect, String)] = [
-            (.flex, "Flex"),
-            (.duo, "Duo"),
-            (.roll, "Roll"),
-            (.shutter, "Shutter"),
-            (.iris, "Iris")
-        ]
-        
-        effectPills.removeAll()
-        for (_, (eff, label)) in effects.enumerated() {
-            let isSel = (AppConfig.shared.selectedEffect == eff)
-            let btn = ModernPillButton(title: label, tooltip: "切换为 \(label) 流体光学效果", fontSize: 10, isAccent: isSel) { [weak self] in
-                AppConfig.shared.selectedEffect = eff
-                self?.refreshEffectButtons()
-            }
-            effectBar.addSubview(btn)
-            effectPills.append(btn)
-        }
-    }
-    
-    private func refreshEffectButtons() {
-        let list: [FoldEffect] = [.flex, .duo, .roll, .shutter, .iris]
-        for (i, btn) in effectPills.enumerated() {
-            guard i < list.count else { continue }
-            btn.setAccent(AppConfig.shared.selectedEffect == list[i])
-        }
     }
     
     private func layoutWingsAndContent() {
         let r = bounds
         if r.height < 100 { return }
         
-        // 关键：留出 38pt 物理硬件刘海安全避让区，避免任何物理刘海与下沿弧度遮挡顶部按钮
+        // 关键：留出 38pt 物理硬件刘海安全避让区
         let notchClearance: CGFloat = 38
         let topBarH: CGFloat = 28
         let topBarY = r.height - notchClearance - topBarH
         
-        leftWingView.frame = CGRect(x: 16, y: topBarY, width: 216, height: topBarH)
-        centerNotchTitle.frame = CGRect(x: (r.width - 160) / 2.0, y: topBarY + 5, width: 160, height: 18)
-        rightWingView.frame = CGRect(x: r.width - 232, y: topBarY, width: 216, height: topBarH)
+        leftWingView.frame = CGRect(x: 18, y: topBarY, width: 200, height: topBarH)
+        statusCapsule.frame = CGRect(x: (r.width - 164) / 2.0, y: topBarY, width: 164, height: topBarH)
+        rightWingView.frame = CGRect(x: r.width - 18 - 200, y: topBarY, width: 200, height: topBarH)
         
-        let barW: CGFloat = r.width - 32
-        let effectBarY = topBarY - 24
-        effectBar.frame = CGRect(x: 16, y: effectBarY, width: barW, height: 20)
-        let labelW: CGFloat = 50
-        let btnW: CGFloat = 50
-        let btnH: CGFloat = 20
-        let gap: CGFloat = 5
-        let totalBtnW = CGFloat(effectPills.count) * btnW + CGFloat(effectPills.count - 1) * gap
-        let totalW = labelW + totalBtnW + 8
-        let startX = (barW - totalW) / 2.0
-        
-        effectLabel.frame = CGRect(x: startX, y: 2, width: labelW, height: 16)
-        for (i, btn) in effectPills.enumerated() {
-            btn.layer?.cornerRadius = 10
-            btn.frame = CGRect(x: startX + labelW + 8 + CGFloat(i) * (btnW + gap), y: 0, width: btnW, height: btnH)
-        }
-        
-        let bodyBottom: CGFloat = 24
-        let bodyTop = effectBarY - 8
+        // 主体便当盒布局（黄金分割 47% : 53%）
+        let bodyBottom: CGFloat = 26
+        let bodyTop = topBarY - 14
         let bodyH: CGFloat = bodyTop - bodyBottom
-        let colW: CGFloat = (r.width - 44) / 2.0
         
-        shortcutsColumn.frame = CGRect(x: 16, y: bodyBottom, width: colW, height: bodyH)
+        let padX: CGFloat = 18
+        let gap: CGFloat = 14
+        let totalW = r.width - padX * 2 - gap
+        let leftW: CGFloat = round(totalW * 0.47)
+        let rightW: CGFloat = totalW - leftW
+        
+        shortcutsColumn.frame = CGRect(x: padX, y: bodyBottom, width: leftW, height: bodyH)
         reloadShortcuts()
         
-        scratchpadColumn.frame = CGRect(x: 16 + colW + 12, y: bodyBottom, width: colW, height: bodyH)
+        scratchpadColumn.frame = CGRect(x: padX + leftW + gap, y: bodyBottom, width: rightW, height: bodyH)
         
-        footerLabel.font = NSFont.monospacedSystemFont(ofSize: 9.5, weight: .regular)
-        footerLabel.textColor = NSColor(white: 0.40, alpha: 1.0)
-        footerLabel.frame = CGRect(x: 20, y: 5, width: r.width - 40, height: 15)
+        footerLabel.frame = CGRect(x: 20, y: 6, width: r.width - 40, height: 14)
     }
     
     public func reloadShortcuts() {
@@ -733,65 +938,57 @@ public final class NotchUnifiedView: NSView {
         let folderItems = items.filter { !$0.isApp }
         
         var currentY = h
-        currentY = renderSection(title: "🤖 AI 智能体", items: aiItems, startY: currentY, containerW: w)
-        currentY = renderSection(title: "⚡ 常用应用", items: appItems, startY: currentY, containerW: w)
-        currentY = renderSection(title: "📁 常用目录", items: folderItems, startY: currentY, containerW: w, showAddButtons: true)
+        currentY = renderSection(title: "AI AGENTS", items: aiItems, startY: currentY, containerW: w)
+        currentY = renderSection(title: "FAVORITES", items: appItems, startY: currentY, containerW: w)
+        currentY = renderSection(title: "DIRECTORIES", items: folderItems, startY: currentY, containerW: w, showAddButtons: true)
     }
     
     private func renderSection(title: String, items: [CustomShortcut], startY: CGFloat, containerW: CGFloat, showAddButtons: Bool = false) -> CGFloat {
+        if items.isEmpty && !showAddButtons { return startY }
         var y = startY
         
         let header = NSTextField(labelWithString: title)
-        header.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
-        header.textColor = NSColor(white: 0.50, alpha: 1.0)
+        header.font = NSFont.systemFont(ofSize: 10.0, weight: .semibold)
+        header.textColor = NSColor(white: 0.45, alpha: 1.0)
         header.frame = CGRect(x: 2, y: y - 16, width: containerW, height: 14)
         shortcutsColumn.addSubview(header)
         y -= 20
         
         let colCount = 2
         let itemW = (containerW - 8) / 2.0
-        let itemH: CGFloat = 28
+        let itemH: CGFloat = 34
         
         for (i, item) in items.enumerated() {
             let row = i / colCount
             let col = i % colCount
             let posX = CGFloat(col) * (itemW + 8)
-            let posY = y - CGFloat(row + 1) * (itemH + 4)
-            if posY < 0 { break }
+            let posY = y - CGFloat(row + 1) * (itemH + 5)
+            if posY < 34 { break }
             
             let card = createCompactTile(item: item, frame: CGRect(x: posX, y: posY, width: itemW, height: itemH))
             shortcutsColumn.addSubview(card)
         }
         
         let rows = (items.count + colCount - 1) / colCount
-        y -= CGFloat(rows) * (itemH + 4)
+        y -= CGFloat(rows) * (itemH + 5)
         
-        if showAddButtons && y > 32 {
+        if showAddButtons {
             let addW = (containerW - 8) / 2.0
-            y -= 4
-            let addApp = createCompactAction(title: "＋添加应用", frame: CGRect(x: 0, y: y - itemH, width: addW, height: itemH)) { [weak self] in
+            let addH: CGFloat = 28
+            let addApp = createCompactAction(title: "＋ 添加应用", frame: CGRect(x: 0, y: 0, width: addW, height: addH)) { [weak self] in
                 self?.pickApp()
             }
+            addApp.toolTip = "选择应用或直接从访达拖入 App"
             shortcutsColumn.addSubview(addApp)
             
-            let addFolder = createCompactAction(title: "＋添加文件夹", frame: CGRect(x: addW + 8, y: y - itemH, width: addW, height: itemH)) { [weak self] in
+            let addFolder = createCompactAction(title: "＋ 添加文件夹", frame: CGRect(x: addW + 8, y: 0, width: addW, height: addH)) { [weak self] in
                 self?.pickFolder()
             }
+            addFolder.toolTip = "选择文件夹或直接从访达拖入文件夹"
             shortcutsColumn.addSubview(addFolder)
-            y -= (itemH + 4)
-            
-            let tipLabel = NonInteractiveLabel(labelWithString: "💡 支持直接从访达拖入 App 或文件夹添加")
-            tipLabel.font = NSFont.systemFont(ofSize: 9.5, weight: .regular)
-            tipLabel.textColor = NSColor(white: 0.38, alpha: 1.0)
-            tipLabel.alignment = .center
-            tipLabel.frame = CGRect(x: 0, y: y - 14, width: containerW, height: 14)
-            shortcutsColumn.addSubview(tipLabel)
-            y -= 18
-        } else {
-            y -= 6
         }
         
-        return y
+        return y - 4
     }
     
     private func createCompactTile(item: CustomShortcut, frame: CGRect) -> NSView {
@@ -803,32 +1000,43 @@ public final class NotchUnifiedView: NSView {
             }
         }
         btn.wantsLayer = true
-        btn.layer?.cornerRadius = 8
-        btn.layer?.backgroundColor = NSColor(white: 0.12, alpha: 0.75).cgColor
-        btn.layer?.borderWidth = 1.0
+        btn.layer?.cornerRadius = 10
+        btn.layer?.cornerCurve = .continuous
+        btn.layer?.backgroundColor = NSColor(white: 0.13, alpha: 0.70).cgColor
+        btn.layer?.borderWidth = 0.6
         btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+        
+        btn.onHover = { [weak btn] hovered in
+            if hovered {
+                btn?.layer?.backgroundColor = NSColor(white: 0.18, alpha: 0.85).cgColor
+                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.22).cgColor
+            } else {
+                btn?.layer?.backgroundColor = NSColor(white: 0.13, alpha: 0.70).cgColor
+                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+            }
+        }
         container.addSubview(btn)
         
         let icon = NSWorkspace.shared.icon(forFile: item.path)
-        icon.size = NSSize(width: 18, height: 18)
-        let imgView = NSImageView(frame: CGRect(x: 6, y: (frame.height - 18) / 2.0, width: 18, height: 18))
+        icon.size = NSSize(width: 20, height: 20)
+        let imgView = NSImageView(frame: CGRect(x: 7, y: (frame.height - 20) / 2.0, width: 20, height: 20))
         imgView.image = icon
         btn.addSubview(imgView)
         
-        let textX: CGFloat = 28
+        let textX: CGFloat = 33
         let textW: CGFloat = frame.width - textX - 6
         
         let titleLabel = NonInteractiveLabel(labelWithString: item.name)
-        titleLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        titleLabel.font = NSFont.systemFont(ofSize: 11.5, weight: .medium)
         titleLabel.textColor = NSColor(white: 0.95, alpha: 1.0)
         titleLabel.lineBreakMode = .byTruncatingTail
-        titleLabel.frame = CGRect(x: textX, y: 12, width: textW, height: 14)
+        titleLabel.frame = CGRect(x: textX, y: 16, width: textW, height: 14)
         btn.addSubview(titleLabel)
         
         let subLabel = NonInteractiveLabel(labelWithString: item.displaySubtitle)
         subLabel.font = NSFont.systemFont(ofSize: 8.5, weight: .regular)
-        subLabel.textColor = NSColor(white: 0.50, alpha: 1.0)
-        subLabel.frame = CGRect(x: textX, y: 1, width: textW, height: 11)
+        subLabel.textColor = NSColor(white: 0.48, alpha: 1.0)
+        subLabel.frame = CGRect(x: textX, y: 3, width: textW, height: 12)
         btn.addSubview(subLabel)
         
         if isEditMode {
@@ -851,15 +1059,26 @@ public final class NotchUnifiedView: NSView {
         let btn = ClosureButton(frame: frame, action: action)
         btn.wantsLayer = true
         btn.layer?.cornerRadius = 9
-        btn.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.55).cgColor
-        btn.layer?.borderWidth = 1.0
-        btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.15).cgColor
+        btn.layer?.cornerCurve = .continuous
+        btn.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.50).cgColor
+        btn.layer?.borderWidth = 0.8
+        btn.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+        
+        btn.onHover = { [weak btn] hovered in
+            if hovered {
+                btn?.layer?.backgroundColor = NSColor(white: 0.14, alpha: 0.70).cgColor
+                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.25).cgColor
+            } else {
+                btn?.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.50).cgColor
+                btn?.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
+            }
+        }
         
         let label = NonInteractiveLabel(labelWithString: title)
-        label.font = NSFont.systemFont(ofSize: 11, weight: .medium)
-        label.textColor = NSColor(white: 0.70, alpha: 1.0)
+        label.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
+        label.textColor = NSColor(white: 0.60, alpha: 1.0)
         label.alignment = .center
-        label.frame = CGRect(x: 0, y: (frame.height - 16) / 2.0, width: frame.width, height: 16)
+        label.frame = CGRect(x: 0, y: (frame.height - 15) / 2.0, width: frame.width, height: 15)
         btn.addSubview(label)
         return btn
     }
@@ -901,7 +1120,8 @@ public final class NotchUnifiedView: NSView {
     }
     
     public func updateAngle(_ angle: Double) {
-        footerLabel.stringValue = String(format: "🟢 传感器: %.0f° · 移出自动收起 · Esc关闭", angle)
+        statusCapsule.setAngle(angle)
+        footerLabel.stringValue = String(format: "NotchFold 硬件角度: %.0f° · 移出自动收起 · Esc 关闭", angle)
     }
     
     public override func mouseUp(with event: NSEvent) {
@@ -963,8 +1183,8 @@ public final class ScratchpadCardView: NSView {
 
 // ─── 快速随手记（支持打字、直接 ⌘V 粘贴文字/截图、拖拽文件，仅清空与存备忘录新建两大功能）───
 public final class NotchScratchpadView: NSView, NSTextViewDelegate {
-    private let titleLabel = NSTextField(labelWithString: "📝 快速随手记")
-    private let hintLabel = NSTextField(labelWithString: "支持打字 · ⌘V 贴截图 · 拖入文件")
+    private let titleLabel = NSTextField(labelWithString: "随手记")
+    private let hintLabel = NSTextField(labelWithString: "⌘V 贴图 · 拖入文件 · 自动留存")
     
     private let cardBackground = ScratchpadCardView()
     private let scrollView = NSScrollView()
@@ -980,6 +1200,9 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
     private var currentAttachmentPath: String?
     private let statusFeedbackLabel = NSTextField(labelWithString: "")
     
+    private var deleteBtn: GhostActionButton?
+    private var saveAddBtn: AccentActionButton?
+    
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupScratchpad()
@@ -991,20 +1214,21 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
     public override var isFlipped: Bool { return false }
     
     private func setupScratchpad() {
-        titleLabel.font = NSFont.systemFont(ofSize: 11.5, weight: .semibold)
-        titleLabel.textColor = NSColor(white: 0.90, alpha: 1.0)
+        titleLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
+        titleLabel.textColor = NSColor(white: 0.50, alpha: 1.0)
         addSubview(titleLabel)
         
         hintLabel.font = NSFont.systemFont(ofSize: 9.5, weight: .regular)
-        hintLabel.textColor = NSColor(white: 0.45, alpha: 1.0)
+        hintLabel.textColor = NSColor(white: 0.40, alpha: 1.0)
         hintLabel.alignment = .right
         addSubview(hintLabel)
         
         cardBackground.wantsLayer = true
-        cardBackground.layer?.cornerRadius = 12
-        cardBackground.layer?.backgroundColor = NSColor(white: 0.10, alpha: 0.85).cgColor
-        cardBackground.layer?.borderWidth = 1.0
-        cardBackground.layer?.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
+        cardBackground.layer?.cornerRadius = 14
+        cardBackground.layer?.cornerCurve = .continuous
+        cardBackground.layer?.backgroundColor = NSColor(white: 0.08, alpha: 0.82).cgColor
+        cardBackground.layer?.borderWidth = 0.8
+        cardBackground.layer?.borderColor = NSColor(white: 1.0, alpha: 0.12).cgColor
         cardBackground.onClick = { [weak self] in
             self?.focusInput()
         }
@@ -1069,18 +1293,18 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         attachmentBar.addSubview(attachmentRemoveBtn)
         cardBackground.addSubview(attachmentBar)
         
-        // 底部极简双按键
-        let deleteBtn = ModernPillButton(title: "🗑️ 清空删除", tooltip: "清空当前随手记内容", isDestructive: true) { [weak self] in
+        // 底部极简双按键（幽灵清空 + 柔蓝微光存入备忘录）
+        let del = GhostActionButton(title: "清空", tooltip: "清空当前随手记内容") { [weak self] in
             self?.clearNote()
         }
-        deleteBtn.frame = CGRect(x: 0, y: 0, width: 88, height: 26)
-        addSubview(deleteBtn)
+        addSubview(del)
+        self.deleteBtn = del
         
-        let saveAddBtn = ModernPillButton(title: "➕ 存入备忘录并新建", tooltip: "保存到 Apple Notes 备忘录并开启全新空白页", isAccent: true) { [weak self] in
+        let save = AccentActionButton(title: "存入备忘录 ↵", tooltip: "保存到 Apple Notes 备忘录并开启全新空白页") { [weak self] in
             self?.saveAndNewNote()
         }
-        saveAddBtn.frame = CGRect(x: 94, y: 0, width: 168, height: 26)
-        addSubview(saveAddBtn)
+        addSubview(save)
+        self.saveAddBtn = save
         
         statusFeedbackLabel.font = NSFont.systemFont(ofSize: 10, weight: .medium)
         statusFeedbackLabel.textColor = NSColor.systemGreen
@@ -1092,22 +1316,22 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
     public override func layout() {
         super.layout()
         let r = bounds
-        titleLabel.frame = CGRect(x: 2, y: r.height - 18, width: 120, height: 16)
-        hintLabel.frame = CGRect(x: 120, y: r.height - 18, width: r.width - 122, height: 16)
+        titleLabel.frame = CGRect(x: 2, y: r.height - 18, width: 100, height: 16)
+        hintLabel.frame = CGRect(x: 100, y: r.height - 18, width: r.width - 102, height: 16)
         
-        let cardY: CGFloat = 32
+        let cardY: CGFloat = 36
         let cardH = r.height - 22 - cardY
         cardBackground.frame = CGRect(x: 0, y: cardY, width: r.width, height: cardH)
         
         if attachmentBar.isHidden {
-            scrollView.frame = CGRect(x: 8, y: 8, width: r.width - 16, height: cardH - 16)
+            scrollView.frame = CGRect(x: 10, y: 10, width: r.width - 20, height: cardH - 20)
         } else {
             let barH: CGFloat = 26
-            attachmentBar.frame = CGRect(x: 8, y: 8, width: r.width - 16, height: barH)
-            attachmentNameLabel.frame = CGRect(x: 30, y: 5, width: r.width - 76, height: 18)
-            attachmentRemoveBtn.frame = CGRect(x: r.width - 44, y: 4, width: 22, height: 20)
+            attachmentBar.frame = CGRect(x: 10, y: 10, width: r.width - 20, height: barH)
+            attachmentNameLabel.frame = CGRect(x: 30, y: 5, width: r.width - 80, height: 18)
+            attachmentRemoveBtn.frame = CGRect(x: r.width - 48, y: 4, width: 22, height: 20)
             
-            scrollView.frame = CGRect(x: 8, y: barH + 14, width: r.width - 16, height: cardH - barH - 22)
+            scrollView.frame = CGRect(x: 10, y: barH + 16, width: r.width - 20, height: cardH - barH - 26)
         }
         
         if let tc = textView.textContainer {
@@ -1115,9 +1339,12 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
             tc.widthTracksTextView = true
         }
         textView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
-        placeholderLabel.frame = CGRect(x: 12, y: cardH - 32, width: r.width - 24, height: 20)
+        placeholderLabel.frame = CGRect(x: 14, y: cardH - 32, width: r.width - 28, height: 20)
         
-        statusFeedbackLabel.frame = CGRect(x: r.width - 200, y: 6, width: 196, height: 18)
+        let btnH: CGFloat = 28
+        deleteBtn?.frame = CGRect(x: 0, y: 0, width: 64, height: btnH)
+        saveAddBtn?.frame = CGRect(x: 72, y: 0, width: 136, height: btnH)
+        statusFeedbackLabel.frame = CGRect(x: 216, y: 5, width: r.width - 220, height: 18)
     }
     
     public func focusInput() {
@@ -1225,6 +1452,7 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
 
 public class ClosureButton: NSButton {
     private let closure: () -> Void
+    public var onHover: ((Bool) -> Void)?
     
     public init(frame frameRect: NSRect, action: @escaping () -> Void) {
         self.closure = action
@@ -1233,11 +1461,25 @@ public class ClosureButton: NSButton {
         self.action = #selector(buttonClicked)
         self.isBordered = false
         self.title = ""
+        
+        let trackingArea = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        self.addTrackingArea(trackingArea)
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    
+    public override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        onHover?(true)
+    }
+    
+    public override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onHover?(false)
+    }
     
     @objc private func buttonClicked() {
         closure()
     }
 }
+

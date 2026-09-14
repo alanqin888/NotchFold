@@ -5,4 +5,5 @@ NotchFold/NotchFold.app/
 NotchFold/.build/
 *.swp
 *.o
+*.zip
 .build/
