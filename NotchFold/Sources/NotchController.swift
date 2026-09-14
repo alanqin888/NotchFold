@@ -565,7 +565,7 @@ public final class NotchController: NSObject {
         let targetY = s.frame.origin.y + s.frame.height - expandedH
         let targetFrame = CGRect(x: targetX, y: targetY, width: expandedW, height: expandedH)
         
-        panel.hasShadow = true
+        panel.hasShadow = false
         view.prepareForExpansion(targetSize: CGSize(width: expandedW, height: expandedH))
         
         // 关键：激活应用与面板焦点，确保随手记输入框光标立现并接收打字输入
@@ -871,9 +871,7 @@ public final class NotchAppTrayView: NSView {
 public final class NotchUnifiedView: NSView {
     public var onToggle: (() -> Void)?
     
-    // 液态暗黑毛玻璃底层与高光
-    private let visualEffectView = NSVisualEffectView()
-    private let glassTintLayer = CALayer()
+    // 纯黑物理底色指示条（收起时的小白条）
     private let capsuleIndicator = CALayer()
     
     private let contentContainer = NSView()
@@ -892,7 +890,7 @@ public final class NotchUnifiedView: NSView {
         super.init(frame: frameRect)
         autoresizingMask = [.width, .height]
         wantsLayer = true
-        setupGlassAppearance()
+        setupPureBlackAppearance()
         setupContentHierarchy()
     }
     
@@ -927,30 +925,19 @@ public final class NotchUnifiedView: NSView {
         NotchController.shared.collapse()
     }
     
-    private func setupGlassAppearance() {
+    private func setupPureBlackAppearance() {
+        wantsLayer = true
         guard let root = layer else { return }
-        root.backgroundColor = NSColor.clear.cgColor
         
-        // 1. 深度暗黑毛玻璃底层（原生 HUD 质感）
-        visualEffectView.material = .hudWindow
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 26
-        visualEffectView.layer?.cornerCurve = .continuous
-        visualEffectView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        addSubview(visualEffectView, positioned: .below, relativeTo: nil)
+        // 1. 根图层纯黑物理底色（100% 纯黑，与物理刘海与边框浑然一体，彻底消除上边框亮线与浮动感）
+        root.backgroundColor = NSColor.black.cgColor
+        root.cornerRadius = 26
+        root.cornerCurve = .continuous
+        root.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        root.borderWidth = 0.0
+        root.borderColor = nil
         
-        // 2. 亚克力暗黑微晶遮罩层（透出底层壁纸微光，保持纯正暗黑沉浸）
-        visualEffectView.layer?.addSublayer(glassTintLayer)
-        glassTintLayer.backgroundColor = NSColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 0.78).cgColor
-        glassTintLayer.borderWidth = 0.6
-        glassTintLayer.borderColor = NSColor(white: 1.0, alpha: 0.16).cgColor
-        glassTintLayer.cornerRadius = 26
-        glassTintLayer.cornerCurve = .continuous
-        glassTintLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        
-        // 3. 收起状态小白条指示器
+        // 2. 收起状态小白条指示器
         root.addSublayer(capsuleIndicator)
         capsuleIndicator.backgroundColor = NSColor(white: 1.0, alpha: 0.45).cgColor
         capsuleIndicator.cornerRadius = 2
@@ -963,13 +950,8 @@ public final class NotchUnifiedView: NSView {
     public override func layout() {
         super.layout()
         let r = bounds
-        visualEffectView.frame = r
-        visualEffectView.layer?.cornerRadius = r.height > 100 ? 26 : 10
-        visualEffectView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
-        
-        glassTintLayer.frame = r
-        glassTintLayer.cornerRadius = r.height > 100 ? 26 : 10
-        glassTintLayer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        layer?.cornerRadius = r.height > 100 ? 26 : 10
+        layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         
         capsuleIndicator.frame = CGRect(x: (r.width - 36) / 2.0, y: 8, width: 36, height: 4)
         
