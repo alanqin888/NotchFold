@@ -64,4 +64,8 @@ if [ -d "${WEB_NEWS_DIST}" ]; then
     echo "⚡ 已同步到 Web dist: ${WEB_NEWS_DIST}/${APP_NAME}-macOS.zip"
 fi
 
+echo "🚀 正在同步覆盖到 /Applications/${APP_NAME}.app..."
+rm -rf "/Applications/${APP_NAME}.app"
+cp -R "${BUNDLE_DIR}" "/Applications/${APP_NAME}.app"
+
 echo "✅ 编译打包完成：${BUNDLE_DIR}"

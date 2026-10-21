@@ -49,6 +49,15 @@ public final class NotchPanel: NSPanel {
     public override func cancelOperation(_ sender: Any?) {
         NotchController.shared.collapse()
     }
+    
+    public override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command && event.charactersIgnoringModifiers?.lowercased() == "q" {
+            NSApp.terminate(nil)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 // ─── 像素级垂直居中、无错位的高端胶囊按钮 ───
@@ -530,14 +539,69 @@ public final class NotchController: NSObject {
             iconImage.isTemplate = true
             btn.image = iconImage
             btn.title = ""
-            btn.toolTip = "展开 NotchFold 纯黑灵动刘海中心"
+            btn.toolTip = "NotchFold 刘海中心 (左键展开/收起 · 右键菜单/退出)"
             btn.target = self
             btn.action = #selector(statusItemClicked)
+            btn.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
     }
     
     @objc private func statusItemClicked() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            showStatusContextMenu()
+        } else {
+            toggle()
+        }
+    }
+    
+    @objc public func showStatusContextMenu() {
+        let menu = NSMenu()
+        
+        let toggleTitle = isExpanded ? "收起刘海面板" : "展开刘海面板"
+        let toggleItem = NSMenuItem(title: toggleTitle, action: #selector(menuToggleAction), keyEquivalent: "")
+        toggleItem.target = self
+        menu.addItem(toggleItem)
+        
+        let demoItem = NSMenuItem(title: "全屏光学折叠演练 (5秒)", action: #selector(menuDemoAction), keyEquivalent: "")
+        demoItem.target = self
+        menu.addItem(demoItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let editItem = NSMenuItem(title: "管理快捷应用 / 文件夹...", action: #selector(menuManageAction), keyEquivalent: "")
+        editItem.target = self
+        menu.addItem(editItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let quitItem = NSMenuItem(title: "退出 NotchFold", action: #selector(menuQuitAction), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        if let button = statusItem?.button {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        }
+    }
+    
+    @objc private func menuToggleAction() {
         toggle()
+    }
+    
+    @objc private func menuDemoAction() {
+        if isExpanded { collapse() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            FoldWindowController.shared.manualDemoSequence()
+        }
+    }
+    
+    @objc private func menuManageAction() {
+        if !isExpanded { expand() }
+        notchContainerView?.toggleEditMode()
+    }
+    
+    @objc private func menuQuitAction() {
+        NSApp.terminate(nil)
     }
     
     public func toggle() {
@@ -884,7 +948,7 @@ public final class NotchUnifiedView: NSView {
     
     private let appTray = NotchAppTrayView()
     private let scratchpadView = NotchScratchpadView()
-    private let footerLabel = NSTextField(labelWithString: "🟢 Apple Silicon 物理传感器就绪 · 移出 0.35s 自动收起 · 按 Esc 退出")
+    private let footerLabel = NSTextField(labelWithString: "🟢 Apple Silicon 物理传感器就绪 · 移出/Esc 收起 · ⌘Q 退出程序")
     
     public override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -993,13 +1057,14 @@ public final class NotchUnifiedView: NSView {
         foldDemo.frame = CGRect(x: 0, y: 0, width: 78, height: 28)
         rightWingView.addSubview(foldDemo)
         
-        let editBtn = ModernPillButton(title: "⚙️ 管理", tooltip: "增删快捷方式") { [weak self] in
-            self?.toggleEditMode()
+        let editBtn = ModernPillButton(title: "⚙️ 管理", tooltip: "管理快捷方式 / 退出程序") { [weak self] in
+            guard let self = self else { return }
+            self.showManagementMenu(from: self.rightWingView)
         }
         editBtn.frame = CGRect(x: 84, y: 0, width: 74, height: 28)
         rightWingView.addSubview(editBtn)
         
-        let closeBtn = ModernPillButton(title: "✕", tooltip: "收起刘海面板") { [weak self] in
+        let closeBtn = ModernPillButton(title: "✕", tooltip: "收起刘海面板 (Esc 收起 · ⌘Q 退出程序)") { [weak self] in
             self?.onToggle?()
         }
         closeBtn.frame = CGRect(x: 164, y: 0, width: 34, height: 28)
@@ -1115,14 +1180,60 @@ public final class NotchUnifiedView: NSView {
         }
     }
     
-    private func toggleEditMode() {
+    public func toggleEditMode() {
         isEditMode.toggle()
         appTray.isEditMode = isEditMode
     }
     
+    private func showManagementMenu(from sourceView: NSView) {
+        let menu = NSMenu()
+        
+        let editItem = NSMenuItem(title: isEditMode ? "✓ 完成快捷方式编辑" : "✏️ 编辑快捷方式 (增删图标)", action: #selector(menuToggleEditAction), keyEquivalent: "")
+        editItem.target = self
+        menu.addItem(editItem)
+        
+        let addItem = NSMenuItem(title: "＋ 添加应用或文件夹...", action: #selector(menuAddCustomAction), keyEquivalent: "")
+        addItem.target = self
+        menu.addItem(addItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let demoItem = NSMenuItem(title: "🌀 运行全屏折叠演练 (⌘⇧F)", action: #selector(menuDemoAction), keyEquivalent: "")
+        demoItem.target = self
+        menu.addItem(demoItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        let quitItem = NSMenuItem(title: "🚪 退出 NotchFold (⌘Q)", action: #selector(menuQuitAction), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+        
+        let point = NSPoint(x: 84, y: 0)
+        menu.popUp(positioning: nil, at: point, in: sourceView)
+    }
+    
+    @objc private func menuToggleEditAction() {
+        toggleEditMode()
+    }
+    
+    @objc private func menuAddCustomAction() {
+        showAddMenu(from: appTray)
+    }
+    
+    @objc private func menuDemoAction() {
+        onToggle?()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            FoldWindowController.shared.manualDemoSequence()
+        }
+    }
+    
+    @objc private func menuQuitAction() {
+        NSApp.terminate(nil)
+    }
+    
     public func updateAngle(_ angle: Double) {
         statusCapsule.setAngle(angle)
-        footerLabel.stringValue = String(format: "NotchFold 硬件角度: %.0f° · 移出自动收起 · Esc 关闭", angle)
+        footerLabel.stringValue = String(format: "NotchFold 硬件角度: %.0f° · 移出/Esc 收起 · ⌘Q 退出程序", angle)
     }
     
     public override func mouseUp(with event: NSEvent) {
@@ -1160,6 +1271,7 @@ public final class NotchUnifiedView: NSView {
 // ─── 允许打字、获得焦点并拦截 Esc 的专属文本框 ───
 public final class ScratchpadTextView: NSTextView {
     public var onCommandEnter: (() -> Void)?
+    public weak var scratchpadView: NotchScratchpadView?
     public override var acceptsFirstResponder: Bool { true }
     public override var canBecomeKeyView: Bool { true }
     
@@ -1174,13 +1286,65 @@ public final class ScratchpadTextView: NSTextView {
     }
     
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.contains(.command) && (event.keyCode == 36 || event.charactersIgnoringModifiers == "\r" || event.charactersIgnoringModifiers == "\n") {
-            if let cb = onCommandEnter {
-                cb()
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command) {
+            let key = event.charactersIgnoringModifiers?.lowercased()
+            if event.keyCode == 36 || event.charactersIgnoringModifiers == "\r" || event.charactersIgnoringModifiers == "\n" {
+                if let cb = onCommandEnter {
+                    cb()
+                    return true
+                }
+            }
+            if key == "v" {
+                if let pad = scratchpadView, pad.handlePasteAction() {
+                    return true
+                }
+            } else if key == "c" {
+                copy(nil)
+                return true
+            } else if key == "a" {
+                selectAll(nil)
+                return true
+            } else if key == "x" {
+                cut(nil)
+                return true
+            } else if key == "z" {
+                if flags.contains(.shift) {
+                    undoManager?.redo()
+                } else {
+                    undoManager?.undo()
+                }
                 return true
             }
         }
         return super.performKeyEquivalent(with: event)
+    }
+    
+    public override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "剪切", action: #selector(cut(_:)), keyEquivalent: "x")
+        menu.addItem(withTitle: "拷贝", action: #selector(copy(_:)), keyEquivalent: "c")
+        
+        let pasteItem = NSMenuItem(title: "粘贴", action: #selector(contextPasteClicked), keyEquivalent: "v")
+        pasteItem.target = self
+        menu.addItem(pasteItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(withTitle: "全选", action: #selector(selectAll(_:)), keyEquivalent: "a")
+        
+        let clearItem = NSMenuItem(title: "清空随手记", action: #selector(contextClearClicked), keyEquivalent: "")
+        clearItem.target = self
+        menu.addItem(clearItem)
+        
+        return menu
+    }
+    
+    @objc private func contextPasteClicked() {
+        scratchpadView?.handlePasteAction()
+    }
+    
+    @objc private func contextClearClicked() {
+        scratchpadView?.clearNote()
     }
 }
 
@@ -1260,6 +1424,7 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         textView.isSelectable = true
         textView.insertionPointColor = NSColor.white
         textView.delegate = self
+        textView.scratchpadView = self
         textView.onCommandEnter = { [weak self] in
             self?.saveAndNewNote()
         }
@@ -1443,26 +1608,51 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         flashFeedback("已添加附件: \(url.lastPathComponent)", isError: false)
     }
     
+    @discardableResult
+    public func handlePasteAction() -> Bool {
+        let pb = NSPasteboard.general
+        
+        // 1. 本地文件（Finder 中拷贝的文件或文件夹）
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
+            let localFiles = urls.filter { $0.isFileURL }
+            if let firstFile = localFiles.first {
+                attachFile(url: firstFile)
+                return true
+            }
+        }
+        
+        // 2. 纯文本优先：如果包含复制的文字或代码段，直接插入输入框
+        if let text = pb.string(forType: .string), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            textView.insertText(text, replacementRange: textView.selectedRange())
+            placeholderLabel.isHidden = !textView.string.isEmpty
+            flashFeedback("已粘贴文字内容", isError: false)
+            return true
+        }
+        
+        // 3. 图像数据：如果剪贴板是截图、图片
+        if let img = NSImage(pasteboard: pb) {
+            let tempDir = NSTemporaryDirectory()
+            let filename = "Screenshot_\(Int(Date().timeIntervalSince1970)).png"
+            let targetURL = URL(fileURLWithPath: tempDir).appendingPathComponent(filename)
+            if let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
+                try? png.write(to: targetURL)
+                attachFile(url: targetURL)
+                flashFeedback("已粘贴图片附件", isError: false)
+                return true
+            }
+        }
+        
+        return false
+    }
+    
     public override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command) && (event.keyCode == 36 || event.charactersIgnoringModifiers == "\r" || event.charactersIgnoringModifiers == "\n") {
             saveAndNewNote()
             return true
         }
         if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers?.lowercased() == "v" {
-            let pb = NSPasteboard.general
-            if let urls = pb.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], let u = urls.first {
-                attachFile(url: u)
+            if handlePasteAction() {
                 return true
-            }
-            if let img = NSImage(pasteboard: pb) {
-                let tempDir = NSTemporaryDirectory()
-                let filename = "Screenshot_\(Int(Date().timeIntervalSince1970)).png"
-                let targetURL = URL(fileURLWithPath: tempDir).appendingPathComponent(filename)
-                if let tiff = img.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff), let png = rep.representation(using: .png, properties: [:]) {
-                    try? png.write(to: targetURL)
-                    attachFile(url: targetURL)
-                    return true
-                }
             }
         }
         return super.performKeyEquivalent(with: event)
