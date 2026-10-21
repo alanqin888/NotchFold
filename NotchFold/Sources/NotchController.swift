@@ -1281,6 +1281,24 @@ public final class ScratchpadTextView: NSTextView {
         super.mouseDown(with: event)
     }
     
+    public override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        // 单击链接立即在浏览器中打开
+        if event.clickCount == 1 && selectedRange().length == 0 {
+            let point = convert(event.locationInWindow, from: nil)
+            let charIndex = characterIndexForInsertion(at: point)
+            if charIndex < (textStorage?.length ?? 0) {
+                if let link = textStorage?.attribute(.link, at: charIndex, effectiveRange: nil) {
+                    if let url = link as? URL {
+                        NSWorkspace.shared.open(url)
+                    } else if let str = link as? String, let url = URL(string: str) {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+        }
+    }
+    
     public override func cancelOperation(_ sender: Any?) {
         NotchController.shared.collapse()
     }
@@ -1322,6 +1340,21 @@ public final class ScratchpadTextView: NSTextView {
     
     public override func menu(for event: NSEvent) -> NSMenu? {
         let menu = NSMenu()
+        
+        let point = convert(event.locationInWindow, from: nil)
+        let charIndex = characterIndexForInsertion(at: point)
+        if charIndex < (textStorage?.length ?? 0),
+           let link = textStorage?.attribute(.link, at: charIndex, effectiveRange: nil) {
+            let targetURL: URL? = (link as? URL) ?? (link as? String).flatMap { URL(string: $0) }
+            if let u = targetURL {
+                let openItem = NSMenuItem(title: "在新窗口打开链接", action: #selector(contextOpenLinkAction(_:)), keyEquivalent: "")
+                openItem.representedObject = u
+                openItem.target = self
+                menu.addItem(openItem)
+                menu.addItem(NSMenuItem.separator())
+            }
+        }
+        
         menu.addItem(withTitle: "剪切", action: #selector(cut(_:)), keyEquivalent: "x")
         menu.addItem(withTitle: "拷贝", action: #selector(copy(_:)), keyEquivalent: "c")
         
@@ -1337,6 +1370,12 @@ public final class ScratchpadTextView: NSTextView {
         menu.addItem(clearItem)
         
         return menu
+    }
+    
+    @objc private func contextOpenLinkAction(_ sender: NSMenuItem) {
+        if let u = sender.representedObject as? URL {
+            NSWorkspace.shared.open(u)
+        }
     }
     
     @objc private func contextPasteClicked() {
@@ -1423,6 +1462,12 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         textView.isEditable = true
         textView.isSelectable = true
         textView.insertionPointColor = NSColor.white
+        textView.isAutomaticLinkDetectionEnabled = true
+        textView.linkTextAttributes = [
+            .foregroundColor: NSColor(red: 0.38, green: 0.68, blue: 1.0, alpha: 1.0),
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .cursor: NSCursor.pointingHand
+        ]
         textView.delegate = self
         textView.scratchpadView = self
         textView.onCommandEnter = { [weak self] in
@@ -1449,19 +1494,22 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         placeholderLabel.isSelectable = false
         cardBackground.addSubview(placeholderLabel)
         
-        // 附件胶囊条
+        // 附件胶囊条（支持显示真实图片缩略图）
         attachmentBar.wantsLayer = true
         attachmentBar.layer?.cornerRadius = 8
-        attachmentBar.layer?.backgroundColor = NSColor(white: 0.20, alpha: 0.85).cgColor
+        attachmentBar.layer?.backgroundColor = NSColor(white: 0.16, alpha: 0.90).cgColor
         attachmentBar.layer?.borderWidth = 1.0
         attachmentBar.layer?.borderColor = NSColor(white: 1.0, alpha: 0.18).cgColor
         attachmentBar.isHidden = true
         
-        attachmentIcon.frame = CGRect(x: 6, y: 5, width: 18, height: 18)
+        attachmentIcon.wantsLayer = true
+        attachmentIcon.layer?.cornerRadius = 5
+        attachmentIcon.layer?.masksToBounds = true
+        attachmentIcon.imageScaling = .scaleProportionallyUpOrDown
         attachmentBar.addSubview(attachmentIcon)
         
-        attachmentNameLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
-        attachmentNameLabel.textColor = NSColor(white: 0.90, alpha: 1.0)
+        attachmentNameLabel.font = NSFont.systemFont(ofSize: 11, weight: .medium)
+        attachmentNameLabel.textColor = NSColor(white: 0.92, alpha: 1.0)
         attachmentNameLabel.lineBreakMode = .byTruncatingMiddle
         attachmentBar.addSubview(attachmentNameLabel)
         
@@ -1506,10 +1554,11 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         if attachmentBar.isHidden {
             scrollView.frame = CGRect(x: 10, y: 10, width: r.width - 20, height: cardH - 20)
         } else {
-            let barH: CGFloat = 26
+            let barH: CGFloat = 36
             attachmentBar.frame = CGRect(x: 10, y: 10, width: r.width - 20, height: barH)
-            attachmentNameLabel.frame = CGRect(x: 30, y: 5, width: r.width - 80, height: 18)
-            attachmentRemoveBtn.frame = CGRect(x: r.width - 48, y: 4, width: 22, height: 20)
+            attachmentIcon.frame = CGRect(x: 6, y: 4, width: 28, height: 28)
+            attachmentNameLabel.frame = CGRect(x: 40, y: 8, width: r.width - 96, height: 20)
+            attachmentRemoveBtn.frame = CGRect(x: r.width - 48, y: 7, width: 22, height: 22)
             
             scrollView.frame = CGRect(x: 10, y: barH + 16, width: r.width - 20, height: cardH - barH - 26)
         }
@@ -1540,6 +1589,18 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
     
     public func textDidChange(_ notification: Notification) {
         placeholderLabel.isHidden = !textView.string.isEmpty
+        textView.checkTextInDocument(nil)
+    }
+    
+    public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        if let url = link as? URL {
+            NSWorkspace.shared.open(url)
+            return true
+        } else if let str = link as? String, let url = URL(string: str) {
+            NSWorkspace.shared.open(url)
+            return true
+        }
+        return false
     }
     
     @objc private func removeAttachmentClicked() {
@@ -1603,7 +1664,15 @@ public final class NotchScratchpadView: NSView, NSTextViewDelegate {
         currentAttachmentPath = url.path
         attachmentBar.isHidden = false
         attachmentNameLabel.stringValue = url.lastPathComponent
-        attachmentIcon.image = NSWorkspace.shared.icon(forFile: url.path)
+        
+        let ext = url.pathExtension.lowercased()
+        let imageExtensions = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "heic", "tiff", "icns"]
+        if imageExtensions.contains(ext), let img = NSImage(contentsOfFile: url.path) {
+            attachmentIcon.image = img
+        } else {
+            attachmentIcon.image = NSWorkspace.shared.icon(forFile: url.path)
+        }
+        
         needsLayout = true
         flashFeedback("已添加附件: \(url.lastPathComponent)", isError: false)
     }

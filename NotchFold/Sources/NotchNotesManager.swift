@@ -39,6 +39,10 @@ public final class NotchNotesManager {
                 let escapedPath = path.replacingOccurrences(of: "\"", with: "\\\"")
                 script += "    set theNote to make new note with properties {body:\"<div><p>\(escapedHTML)</p></div>\"}\n"
                 script += "    make new attachment at theNote with data (POSIX file \"\(escapedPath)\")\n"
+                script += "    delay 0.3\n"
+                script += "    if (count of attachments of theNote) > 1 then\n"
+                script += "        delete last attachment of theNote\n"
+                script += "    end if\n"
             } else {
                 script += "    make new note with properties {body:\"<div><p>\(escapedHTML)</p></div>\"}\n"
             }
